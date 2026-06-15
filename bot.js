@@ -172,6 +172,24 @@ function initializeBot() {
         lastError = typeof reason === 'string' ? reason : 'Bot disconnected';
         console.log('❌ Disconnected:', reason);
         if (io) io.emit('status', { status: 'disconnected', reason });
+        
+        // If logged out from phone, automatically clean session folder and restart bot to show new QR
+        if (reason === 'LOGOUT') {
+            console.log('Session was logged out. Cleaning up session files...');
+            try {
+                client.destroy().catch(() => {});
+            } catch (e) {}
+            
+            const authPath = path.join(__dirname, '.wwebjs_auth');
+            if (fs.existsSync(authPath)) {
+                try {
+                    fs.rmSync(authPath, { recursive: true, force: true });
+                } catch (fsErr) {
+                    console.error('Failed to delete auth path on logout:', fsErr.message);
+                }
+            }
+            setTimeout(() => initializeBot(), 2000);
+        }
     });
     
     client.on('message', async (message) => {
@@ -287,21 +305,38 @@ async function sendBulk(bookings, templateMessage) {
 async function logoutBot() {
     try {
         if (client) {
-            await client.logout();
-            await client.destroy();
+            try {
+                await client.logout();
+            } catch (logoutErr) {
+                console.warn('Warning: client.logout failed:', logoutErr.message);
+            }
+            try {
+                await client.destroy();
+            } catch (destroyErr) {
+                console.warn('Warning: client.destroy failed:', destroyErr.message);
+            }
         }
-        const authPath = path.join(__dirname, '.wwebjs_auth');
-        if (fs.existsSync(authPath)) fs.rmSync(authPath, { recursive: true, force: true });
-        isReady = false;
-        clientInfo = null;
-        qrCodeData = null;
-        lastError = null;
-        setTimeout(() => initializeBot(), 2000);
-        return { success: true };
     } catch (e) {
-        lastError = e.message;
-        return { success: false, error: e.message };
+        console.error('Error during client logout cleanup:', e.message);
     }
+
+    // Always clean session files and re-initialize bot
+    try {
+        const authPath = path.join(__dirname, '.wwebjs_auth');
+        if (fs.existsSync(authPath)) {
+            fs.rmSync(authPath, { recursive: true, force: true });
+        }
+    } catch (fsErr) {
+        console.error('Failed to delete auth path during logout:', fsErr.message);
+    }
+
+    isReady = false;
+    clientInfo = null;
+    qrCodeData = null;
+    lastError = null;
+
+    setTimeout(() => initializeBot(), 2000);
+    return { success: true };
 }
 
 function getCurrentQR() { return qrCodeData; }
