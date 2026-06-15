@@ -1,0 +1,27 @@
+<script>
+    function openSidebar() {
+        const sidebar = document.getElementById('appSidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        if (!sidebar || !overlay) return;
+        sidebar.classList.remove('-translate-x-full');
+        overlay.classList.remove('hidden');
+        document.body.classList.add('overflow-hidden');
+    }
+
+    function closeSidebar() {
+        const sidebar = document.getElementById('appSidebar');
+        const overlay = document.getElementById('sidebarOverlay');
+        if (!sidebar || !overlay) return;
+        sidebar.classList.add('-translate-x-full');
+        overlay.classList.add('hidden');
+        document.body.classList.remove('overflow-hidden');
+    }
+
+    window.addEventListener('resize', () => {
+        if (window.innerWidth >= 1024) {
+            const overlay = document.getElementById('sidebarOverlay');
+            if (overlay) overlay.classList.add('hidden');
+            document.body.classList.remove('overflow-hidden');
+        }
+    });
+</script>

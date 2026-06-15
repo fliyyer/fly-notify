@@ -1,0 +1,17 @@
+<script>
+    (function () {
+        const token = localStorage.getItem('wa_token');
+        if (!token) { window.location.replace('/login'); return; }
+        try {
+            // Decode JWT payload (no library needed — just base64)
+            const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+            if (payload.exp && Date.now() / 1000 > payload.exp) {
+                localStorage.removeItem('wa_token');
+                window.location.replace('/login');
+            }
+        } catch (_) {
+            localStorage.removeItem('wa_token');
+            window.location.replace('/login');
+        }
+    })();
+</script>

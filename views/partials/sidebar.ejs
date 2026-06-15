@@ -1,0 +1,75 @@
+<div
+  id="sidebarOverlay"
+  class="fixed inset-0 z-40 hidden bg-stone-950/30 lg:hidden"
+  onclick="closeSidebar()"
+></div>
+<aside
+  id="appSidebar"
+  class="fixed inset-y-0 left-0 z-50 flex w-72 -translate-x-full flex-col border-r border-stone-200 bg-white transition-transform duration-200 ease-out lg:static lg:translate-x-0 lg:flex-shrink-0"
+>
+  <div
+    class="flex items-center justify-between border-b border-stone-200 p-6 sm:p-8"
+  >
+    <div class="flex items-center gap-4">
+      <img
+        src="/icons/flynotify-icon.svg"
+        alt="FlyNotify"
+        class="h-12 w-12 rounded-2xl border border-stone-200"
+      />
+      <div>
+        <h1 class="font-semibold text-xl text-stone-900">FlyNotify</h1>
+        <p class="text-xs uppercase tracking-[0.2em] text-stone-500">
+          Gateway Console
+        </p>
+      </div>
+    </div>
+    <button
+      type="button"
+      class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 text-stone-600 lg:hidden"
+      onclick="closeSidebar()"
+      aria-label="Close menu"
+    >
+      <i class="fas fa-times"></i>
+    </button>
+  </div>
+  <nav class="flex-1 space-y-1 overflow-y-auto p-4">
+    <a
+      href="/dashboard"
+      class="nav-link block rounded-full px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-950 transition"
+    >
+      <i class="fas fa-bolt mr-3 text-stone-400"></i>Dashboard
+    </a>
+    <a
+      href="/send"
+      class="nav-link block rounded-full px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-950 transition"
+    >
+      <i class="fas fa-paper-plane mr-3 text-stone-400"></i>Send Message
+    </a>
+    <a
+      href="/templates"
+      class="nav-link block rounded-full px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-950 transition"
+    >
+      <i class="fas fa-file-alt mr-3 text-stone-400"></i>Templates
+    </a>
+    <a
+      href="/history"
+      class="nav-link block rounded-full px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-950 transition"
+    >
+      <i class="fas fa-history mr-3 text-stone-400"></i>History
+    </a>
+    <a
+      href="/scan"
+      class="nav-link block rounded-full px-4 py-3 text-sm font-medium text-stone-700 hover:bg-stone-100 hover:text-stone-950 transition"
+    >
+      <i class="fas fa-qrcode mr-3 text-stone-400"></i>Connect Bot
+    </a>
+  </nav>
+  <div class="border-t border-stone-200 p-4">
+    <button
+      onclick="logout()"
+      class="w-full rounded-full bg-stone-900 px-4 py-3 text-sm font-medium text-white transition hover:bg-stone-800"
+    >
+      <i class="fas fa-sign-out-alt mr-3"></i>Logout
+    </button>
+  </div>
+</aside>
