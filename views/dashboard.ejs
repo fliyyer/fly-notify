@@ -254,7 +254,7 @@ const app = express();
 app.use(express.json());
 
 app.post('/send-whatsapp', async (req, res) => {
-  const response = await fetch('http://localhost:3000/api/push', {
+  const response = await fetch('${window.location.origin}/api/push', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
@@ -306,6 +306,20 @@ app.listen(4000, () => {
         socket.on('qr', loadBotStatus);
         socket.on('ready', loadBotStatus);
         socket.on('status', loadBotStatus);
+
+        // Update API snippet to use the current host origin dynamically
+        const snippetEl = document.getElementById('apiSnippet');
+        if (snippetEl) {
+            snippetEl.textContent = `curl -X POST ${window.location.origin}/api/push \\
+  -H "Content-Type: application/json" \\
+  -H "x-api-key: YOUR_KEY" \\
+  -d '{
+    "to": "+14155550123",
+    "recipientName": "Alya",
+    "message": "Halo {name}, status terbaru sudah ready.",
+    "variables": { "name": "Alya" }
+  }'`;
+        }
 
         loadStats();
         loadBotStatus();

@@ -6,7 +6,7 @@ Dokumentasi ini untuk aplikasi client, termasuk Express app lain yang ingin mema
 
 - Bot WhatsApp sudah connect di dashboard.
 - API key sudah digenerate dari dashboard.
-- Server gateway berjalan, misalnya di `http://localhost:3000`.
+- Server gateway berjalan, misalnya di `https://flynotify.rahmatdev.my.id`.
 
 ## Generate API Key
 
@@ -82,7 +82,7 @@ const app = express();
 app.use(express.json());
 
 app.post('/send-whatsapp', async (req, res) => {
-  const response = await fetch('http://localhost:3000/api/push', {
+  const response = await fetch('https://flynotify.rahmatdev.my.id/api/push', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
