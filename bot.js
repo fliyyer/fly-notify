@@ -72,6 +72,36 @@ function initializeBot() {
         }
     }
     
+    // Clean SingletonLock if exists to prevent Puppeteer "profile in use" error in Docker
+    const authPath = path.join(__dirname, '.wwebjs_auth');
+    if (fs.existsSync(authPath)) {
+        try {
+            const deleteLockFiles = (dir) => {
+                const files = fs.readdirSync(dir);
+                for (const file of files) {
+                    const fullPath = path.join(dir, file);
+                    try {
+                        const stat = fs.lstatSync(fullPath);
+                        if (stat.isDirectory()) {
+                            deleteLockFiles(fullPath);
+                        } else if (file === 'SingletonLock') {
+                            fs.unlinkSync(fullPath);
+                            console.log(`Deleted SingletonLock: ${fullPath}`);
+                        }
+                    } catch (e) {
+                        try {
+                            fs.unlinkSync(fullPath);
+                            console.log(`Deleted SingletonLock (fallback): ${fullPath}`);
+                        } catch (unlinkErr) {}
+                    }
+                }
+            };
+            deleteLockFiles(authPath);
+        } catch (err) {
+            console.warn('Warning: Failed to clean SingletonLock:', err.message);
+        }
+    }
+    
     client = new Client({
         authStrategy: new LocalAuth({
             clientId: config.sessionName,
