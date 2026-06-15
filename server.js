@@ -15,6 +15,15 @@ const config = require('./config');
 const db = require('./data/database');
 const bot = require('./bot');
 
+// Global exception and rejection handlers to prevent crashes in Docker/production
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('⚠️ Unhandled Rejection at:', promise, 'reason:', reason);
+});
+
+process.on('uncaughtException', (err) => {
+    console.error('⚠️ Uncaught Exception thrown:', err);
+});
+
 const app = express();
 const server = http.createServer(app);
 const io = new Server(server, { cors: { origin: '*' } });
