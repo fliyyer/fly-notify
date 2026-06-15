@@ -1,0 +1,108 @@
+name: Deploy to VPS
+
+on:
+  push:
+    branches:
+      - main   # trigger hanya dari branch main
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}   # contoh: fliyyer/fly-notify
+
+jobs:
+  # ─────────────────────────────────────────────────────────────
+  # Job 1: Build & push Docker image ke GitHub Container Registry
+  # ─────────────────────────────────────────────────────────────
+  build-and-push:
+    name: Build & Push Image
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+
+    outputs:
+      image: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract Docker metadata (tags & labels)
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build and push image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  # ─────────────────────────────────────────────────────────────
+  # Job 2: SSH ke VPS, pull image terbaru, restart container
+  # ─────────────────────────────────────────────────────────────
+  deploy:
+    name: Deploy to VPS
+    runs-on: ubuntu-latest
+    needs: build-and-push
+
+    steps:
+      - name: Checkout (untuk docker-compose.yml)
+        uses: actions/checkout@v4
+
+      - name: Copy docker-compose.yml ke VPS
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          source: "docker-compose.yml"
+          target: "/opt/fly-notify"
+
+      - name: SSH & deploy
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT }}
+          script: |
+            set -e
+            cd /opt/fly-notify
+
+            # Login ke GHCR agar bisa pull private image
+            echo "${{ secrets.GHCR_PAT }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Set env vars (dari GitHub Secrets)
+            export GITHUB_REPOSITORY=${{ github.repository }}
+            export ADMIN_PASSWORD=${{ secrets.ADMIN_PASSWORD }}
+            export JWT_SECRET=${{ secrets.JWT_SECRET }}
+            export SESSION_NAME=${{ secrets.SESSION_NAME }}
+
+            # Pull image terbaru & restart
+            docker compose pull
+            docker compose up -d --remove-orphans
+
+            # Buang image lama yang tidak terpakai
+            docker image prune -f
+
+            echo "✅ Deploy selesai"

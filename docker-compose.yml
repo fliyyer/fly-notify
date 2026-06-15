@@ -1,0 +1,29 @@
+services:
+  fly-notify:
+    image: ghcr.io/${GITHUB_REPOSITORY}:latest
+    container_name: fly-notify
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    environment:
+      - PORT=3000
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD}
+      - JWT_SECRET=${JWT_SECRET}
+      - SESSION_NAME=${SESSION_NAME:-fly-notify-session}
+      - DEFAULT_COUNTRY_CODE=${DEFAULT_COUNTRY_CODE:-62}
+      - NOTIFICATION_DELAY=${NOTIFICATION_DELAY:-2000}
+      - MAX_RETRY=${MAX_RETRY:-3}
+    volumes:
+      - wa_session:/app/.wwebjs_auth
+      - wa_cache:/app/.wwebjs_cache
+      - fly_data:/app/data
+    # Chromium / Puppeteer sandboxing
+    cap_add:
+      - SYS_ADMIN
+    security_opt:
+      - seccomp=unconfined
+
+volumes:
+  wa_session:
+  wa_cache:
+  fly_data:
