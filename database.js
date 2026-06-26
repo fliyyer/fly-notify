@@ -1,14 +1,14 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const config = require('../config');
+const config = require('./config');
 
-const dataDir = path.join(__dirname);
+const dataDir = path.join(__dirname, 'data');
 if (!fs.existsSync(dataDir)) {
     fs.mkdirSync(dataDir, { recursive: true });
 }
 
-const dbFile = path.join(__dirname, 'db.json');
+const dbFile = path.join(dataDir, 'db.json');
 
 let database = {
     bookings: [],

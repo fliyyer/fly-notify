@@ -12,7 +12,7 @@ const jimp = require('jimp');
 const fs = require('fs');
 
 const config = require('./config');
-const db = require('./data/database');
+const db = require('./database');
 const bot = require('./bot');
 
 // Global exception and rejection handlers to prevent crashes in Docker/production

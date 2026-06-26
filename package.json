@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node server.js",
     "bot": "node bot.js",
-    "test:syntax": "node --check server.js && node --check bot.js && node --check data/database.js",
+    "test:syntax": "node --check server.js && node --check bot.js && node --check database.js",
     "test:smoke": "node scripts/smoke-test.js",
     "test": "npm run test:syntax && npm run test:smoke"
   },
