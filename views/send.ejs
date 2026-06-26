@@ -71,6 +71,14 @@
 
                         <form id="pushForm" class="mt-6 space-y-4" novalidate>
 
+                            <!-- Kirim dari device -->
+                            <div>
+                                <label class="mb-1.5 block text-sm font-medium text-stone-700">Kirim Dari Device <span class="text-red-500">*</span></label>
+                                <select id="deviceId" class="field">
+                                    <option value="auto">Otomatis (First Ready)</option>
+                                </select>
+                            </div>
+
                             <!-- Nomor tujuan -->
                             <div>
                                 <label class="mb-1.5 block text-sm font-medium text-stone-700">Nomor Tujuan <span class="text-red-500">*</span></label>
@@ -290,7 +298,8 @@
                 numbers:       document.getElementById('numbers').value,
                 templateId:    (currentMode === 'template' && document.getElementById('templateId').value) ? document.getElementById('templateId').value : null,
                 customMessage: document.getElementById('customMessage').value,
-                variables
+                variables,
+                deviceId:      document.getElementById('deviceId').value
             };
 
             try {
@@ -343,7 +352,34 @@
             });
         });
 
+        async function loadDevices() {
+            try {
+                const res = await fetch('/api/devices');
+                const devices = await res.json();
+                const select = document.getElementById('deviceId');
+                
+                select.innerHTML = '<option value="auto">Otomatis (First Ready)</option>';
+                
+                devices.forEach(device => {
+                    const statusText = device.status?.ready ? 'Connected' : 'Offline/Not Connected';
+                    const option = document.createElement('option');
+                    option.value = device.id;
+                    option.textContent = `${device.name} (${device.phoneNumber ? '+' + device.phoneNumber : 'Not connected'}) [${statusText}]`;
+                    if (!device.status?.ready) {
+                        option.textContent += ' ❌';
+                        option.disabled = true;
+                    } else {
+                        option.textContent += ' ✅';
+                    }
+                    select.appendChild(option);
+                });
+            } catch (e) {
+                console.error('Failed to load devices:', e);
+            }
+        }
+
         loadTemplates();
+        loadDevices();
     </script>
     <%- include('partials/app-shell-script') %>
 </body>

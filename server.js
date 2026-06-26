@@ -67,15 +67,56 @@ app.post('/api/login', (req, res) => {
     }
 });
 
-app.get('/api/bot/status', (req, res) => res.json(bot.getStatus()));
+app.get('/api/bot/status', (req, res) => {
+    const defaultDevice = db.getDevices()[0];
+    res.json(bot.getStatus(defaultDevice ? defaultDevice.id : 'default'));
+});
 
 app.get('/api/bot/qr', (req, res) => {
-    const qr = bot.getCurrentQR();
+    const defaultDevice = db.getDevices()[0];
+    const qr = bot.getCurrentQR(defaultDevice ? defaultDevice.id : 'default');
     if (qr) res.json({ success: true, qr });
     else res.json({ success: false, error: 'QR belum tersedia' });
 });
 
-app.post('/api/bot/logout', async (req, res) => res.json(await bot.logoutBot()));
+app.post('/api/bot/logout', async (req, res) => {
+    const defaultDevice = db.getDevices()[0];
+    res.json(await bot.logoutBot(defaultDevice ? defaultDevice.id : 'default'));
+});
+
+// ============ MULTI-DEVICE API ROUTES ============
+
+app.get('/api/devices', (req, res) => {
+    const devices = db.getDevices();
+    const statuses = bot.getDevicesStatus();
+    const result = devices.map(d => ({
+        ...d,
+        status: statuses[d.id] || { ready: false, hasQR: false, qr: null, info: null, error: null }
+    }));
+    res.json(result);
+});
+
+app.post('/api/devices', (req, res) => {
+    const { name } = req.body;
+    if (!name) {
+        return res.status(400).json({ success: false, error: 'Nama device harus diisi' });
+    }
+    const newDevice = db.addDevice(name);
+    bot.initializeBot(newDevice.id);
+    res.json({ success: true, device: newDevice });
+});
+
+app.delete('/api/devices/:id', async (req, res) => {
+    const { id } = req.params;
+    const result = await bot.deleteBot(id);
+    res.json(result);
+});
+
+app.post('/api/devices/:id/logout', async (req, res) => {
+    const { id } = req.params;
+    const result = await bot.logoutBot(id);
+    res.json(result);
+});
 
 function fillTemplate(message, variables) {
     return String(message || '').replace(/\{(\w+)\}/g, (_, key) => {
@@ -120,7 +161,7 @@ app.post('/api/qr/scan', upload.single('qrImage'), async (req, res) => {
 
 app.post('/api/send', async (req, res) => {
     try {
-        const { numbers, name, templateId, customMessage, variables, appName } = req.body;
+        const { numbers, name, templateId, customMessage, variables, appName, deviceId } = req.body;
         const targets = Array.isArray(numbers)
             ? numbers
             : String(numbers || '')
@@ -140,8 +181,17 @@ app.post('/api/send', async (req, res) => {
         }
         if (!message) return res.status(400).json({ success: false, error: 'Pesan tidak boleh kosong' });
 
-        const status = bot.getStatus();
-        if (!status.ready) return res.status(400).json({ success: false, error: 'Bot belum siap' });
+        let activeStatus;
+        if (deviceId && deviceId !== 'auto') {
+            activeStatus = bot.getStatus(deviceId);
+        } else {
+            const statuses = bot.getDevicesStatus();
+            const hasReady = Object.values(statuses).some(s => s.ready);
+            activeStatus = { ready: hasReady };
+        }
+        if (!activeStatus.ready) {
+            return res.status(400).json({ success: false, error: 'WhatsApp bot belum siap atau device tidak aktif' });
+        }
 
         const hydratedMessage = fillTemplate(message, { name, app: appName, ...variables });
         const results = [];
@@ -152,7 +202,8 @@ app.post('/api/send', async (req, res) => {
                     name: name || 'Manual Recipient',
                     message: hydratedMessage,
                     source: 'dashboard',
-                    appName: appName || 'Dashboard Push'
+                    appName: appName || 'Dashboard Push',
+                    deviceId: deviceId
                 });
                 results.push({ ...result, phone });
             } catch (error) {
@@ -181,11 +232,26 @@ app.get('/api/notifications', (req, res) => res.json(db.getNotifications()));
 // API Keys
 app.get('/api/keys', (req, res) => res.json(db.getApiKeys()));
 app.post('/api/keys', (req, res) => {
-    const status = bot.getStatus();
-    if (!status.ready) {
-        return res.status(400).json({ success: false, error: 'Hubungkan bot WhatsApp dulu sebelum generate API key' });
+    const { name, deviceId } = req.body;
+    const targetDevice = deviceId || 'auto';
+    const statuses = bot.getDevicesStatus();
+
+    if (targetDevice !== 'auto') {
+        const devStatus = statuses[targetDevice];
+        if (!devStatus) {
+            return res.status(400).json({ success: false, error: 'Device tidak ditemukan' });
+        }
+        if (!devStatus.ready) {
+            return res.status(400).json({ success: false, error: `Device belum terhubung. Silakan hubungkan device terlebih dahulu.` });
+        }
+    } else {
+        const hasReady = Object.values(statuses).some(s => s.ready);
+        if (!hasReady) {
+            return res.status(400).json({ success: false, error: 'Hubungkan minimal satu bot WhatsApp dulu sebelum generate API key' });
+        }
     }
-    const key = db.addApiKey(req.body.name);
+
+    const key = db.addApiKey(name, targetDevice);
     res.json({ success: true, apiKey: key });
 });
 app.delete('/api/keys/:id', (req, res) => {
@@ -202,7 +268,7 @@ app.post('/api/push', async (req, res) => {
             return res.status(401).json({ success: false, error: 'API key tidak valid' });
         }
 
-        const { to, message, recipientName, variables, templateId } = req.body;
+        const { to, message, recipientName, variables, templateId, deviceId, preferredDeviceId } = req.body;
         if (!to) return res.status(400).json({ success: false, error: 'Field "to" wajib diisi' });
 
         let finalMessage = message;
@@ -224,7 +290,8 @@ app.post('/api/push', async (req, res) => {
             message: finalMessage,
             source: 'api',
             appName: apiKey.name,
-            meta: { templateId: templateId || null }
+            meta: { templateId: templateId || null },
+            deviceId: deviceId || preferredDeviceId || apiKey.deviceId
         });
 
         db.touchApiKey(apiKey.id);
@@ -256,8 +323,12 @@ app.get('/api/stats', (req, res) => {
 // ============ SOCKET.IO ============
 
 io.on('connection', (socket) => {
-    const status = bot.getStatus();
-    if (status.hasQR) socket.emit('qr', { qr: bot.getCurrentQR(), status: 'qr' });
+    socket.emit('devices_status', bot.getDevicesStatus());
+
+    const defaultDevice = db.getDevices()[0];
+    const targetId = defaultDevice ? defaultDevice.id : 'default';
+    const status = bot.getStatus(targetId);
+    if (status.hasQR) socket.emit('qr', { qr: bot.getCurrentQR(targetId), status: 'qr' });
     else if (status.ready) socket.emit('ready', { info: status.info });
     
     socket.on('disconnect', () => {});
@@ -271,5 +342,5 @@ bot.setIO(io);
 server.listen(config.port, () => {
     console.log(`🌐 Server: http://localhost:${config.port}`);
     console.log(`📋 Dashboard: http://localhost:${config.port}/dashboard`);
-    setTimeout(() => bot.initializeBot(), 1500);
+    setTimeout(() => bot.initializeAllBots(), 1500);
 });

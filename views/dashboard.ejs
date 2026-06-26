@@ -60,23 +60,14 @@
                             <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                                 <div>
                                     <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Bot Runtime</p>
-                                    <h3 class="mt-2 text-3xl font-bold">Koneksi WhatsApp</h3>
+                                    <h3 class="mt-2 text-3xl font-bold">WhatsApp Accounts</h3>
                                 </div>
                                 <div class="flex flex-wrap gap-3">
-                                    <a href="/scan" class="btn-soft bg-emerald-50 text-emerald-800">Open Connect Page</a>
-                                    <button onclick="logoutBot()" class="btn-soft bg-stone-900 text-white">Reset Session</button>
+                                    <a href="/scan" class="btn-soft bg-emerald-50 text-emerald-800"><i class="fas fa-cog"></i> Manage Devices</a>
                                 </div>
                             </div>
-                            <div class="mt-6 grid gap-6 md:grid-cols-[0.7fr_1.3fr]">
-                                <div>
-                                    <div id="botBadge" class="inline-flex rounded-full px-4 py-2 text-sm font-semibold bg-stone-100 text-stone-700">Checking...</div>
-                                    <p id="botMeta" class="mt-4 text-sm leading-6 text-stone-600"></p>
-                                    <p id="botError" class="hidden mt-4 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700"></p>
-                                </div>
-                                <div id="qrContainer" class="hidden">
-                                    <p class="mb-3 text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Scan this QR</p>
-                                    <img id="qrImage" class="card h-[280px] w-[280px] bg-white p-3" alt="WhatsApp QR" />
-                                </div>
+                            <div id="dashboardDevicesList" class="mt-6 space-y-4">
+                                <div class="animate-pulse rounded-3xl bg-stone-100 h-20 w-full"></div>
                             </div>
                         </div>
 
@@ -86,9 +77,14 @@
                                 <h3 class="mt-2 text-3xl font-bold">Generate key untuk app client</h3>
                                 <p class="mt-2 text-sm text-stone-600">Generate hanya aktif saat bot WhatsApp sudah connected.</p>
                             </div>
-                            <form id="keyForm" class="mt-6 flex flex-col gap-3 md:flex-row">
-                                <input id="keyName" placeholder="Nama app, tenant, atau partner" class="flex-1 rounded-full border border-stone-300 bg-white px-5 py-3 outline-none">
-                                <button id="generateKeyBtn" type="submit" class="btn-soft bg-emerald-600 text-white">Generate API Key</button>
+                            <form id="keyForm" class="mt-6 flex flex-col gap-4">
+                                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <input id="keyName" placeholder="Nama app, tenant, atau partner" class="rounded-full border border-stone-300 bg-white px-5 py-3 outline-none">
+                                    <select id="keyDeviceId" class="rounded-full border border-stone-300 bg-white px-5 py-3 outline-none">
+                                        <option value="auto">Kirim lewat: Otomatis (First Ready)</option>
+                                    </select>
+                                </div>
+                                <button id="generateKeyBtn" type="submit" class="btn-soft bg-emerald-600 text-white justify-center self-start">Generate API Key</button>
                             </form>
                             <div id="keyFeedback" class="hidden mt-4 rounded-2xl p-4 text-sm font-medium"></div>
                             <div id="keyList" class="mt-6 space-y-4"></div>
@@ -138,51 +134,100 @@
             document.getElementById('statTemplates').textContent = stats.templateCount || 0;
         }
 
+        let allDevices = [];
+
+        async function loadDevices() {
+            try {
+                const res = await fetch('/api/devices');
+                allDevices = await res.json();
+                
+                const select = document.getElementById('keyDeviceId');
+                if (select) {
+                    const currentVal = select.value;
+                    select.innerHTML = '<option value="auto">Kirim lewat: Otomatis (First Ready)</option>';
+                    allDevices.forEach(device => {
+                        const statusText = device.status?.ready ? 'Connected' : 'Offline';
+                        const option = document.createElement('option');
+                        option.value = device.id;
+                        option.textContent = `${device.name} (${device.phoneNumber ? '+' + device.phoneNumber : 'Not connected'}) [${statusText}]`;
+                        if (!device.status?.ready) {
+                            option.textContent += ' ❌';
+                            option.disabled = true;
+                        } else {
+                            option.textContent += ' ✅';
+                        }
+                        select.appendChild(option);
+                    });
+                    if (currentVal) select.value = currentVal;
+                }
+            } catch (e) {
+                console.error('Failed to load devices:', e);
+            }
+        }
+
         async function loadBotStatus() {
-            const res = await fetch('/api/bot/status');
-            const status = await res.json();
-            const badge = document.getElementById('botBadge');
-            const meta = document.getElementById('botMeta');
-            const error = document.getElementById('botError');
-            const qrContainer = document.getElementById('qrContainer');
-            const qrImage = document.getElementById('qrImage');
+            await loadDevices();
+            const devices = allDevices;
+            const container = document.getElementById('dashboardDevicesList');
             const keyButton = document.getElementById('generateKeyBtn');
             const keyName = document.getElementById('keyName');
 
-            if (status.ready) {
-                badge.className = 'inline-flex rounded-full px-4 py-2 text-sm font-semibold bg-emerald-100 text-emerald-800';
-                badge.textContent = 'BOT CONNECTED';
-                meta.textContent = (status.info?.name || 'Unknown') + ' / +' + (status.info?.number || '-');
-                error.classList.add('hidden');
-                error.textContent = '';
-                qrContainer.classList.add('hidden');
-                keyButton.disabled = false;
-                keyName.disabled = false;
-            } else if (status.hasQR) {
-                badge.className = 'inline-flex rounded-full px-4 py-2 text-sm font-semibold bg-amber-100 text-amber-800';
-                badge.textContent = 'WAITING FOR QR SCAN';
-                meta.textContent = 'Buka WhatsApp > Perangkat tertaut > scan QR ini.';
-                error.classList.add('hidden');
-                error.textContent = '';
-                qrImage.src = status.qr || '';
-                qrContainer.classList.remove('hidden');
-                keyButton.disabled = true;
-                keyName.disabled = true;
-            } else {
-                badge.className = 'inline-flex rounded-full px-4 py-2 text-sm font-semibold bg-stone-200 text-stone-700';
-                badge.textContent = 'BOT OFFLINE';
-                meta.textContent = 'Bot belum siap menerima push.';
-                qrContainer.classList.add('hidden');
-                keyButton.disabled = true;
-                keyName.disabled = true;
-                if (status.error) {
-                    error.textContent = status.error;
-                    error.classList.remove('hidden');
-                } else {
-                    error.classList.add('hidden');
-                    error.textContent = '';
-                }
+            if (devices.length === 0) {
+                container.innerHTML = `
+                    <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5 text-center">
+                        <p class="font-semibold text-stone-700">Belum ada WhatsApp device terdaftar.</p>
+                        <a href="/scan" class="mt-3 inline-flex text-sm font-bold text-stone-900 underline hover:text-stone-700">Tautkan WhatsApp pertama</a>
+                    </div>
+                `;
+                if (keyButton) keyButton.disabled = true;
+                if (keyName) keyName.disabled = true;
+                loadKeys();
+                return;
             }
+
+            const hasReady = devices.some(d => d.status?.ready);
+            if (keyButton) keyButton.disabled = !hasReady;
+            if (keyName) keyName.disabled = !hasReady;
+
+            container.innerHTML = devices.map(d => {
+                const s = d.status || { ready: false, hasQR: false, qr: null, error: null };
+                let statusBadge = '';
+                let details = '';
+
+                if (s.ready) {
+                    statusBadge = '<span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">CONNECTED</span>';
+                    details = `<p class="mt-1.5 text-sm font-medium text-stone-900">${s.info?.name || 'WhatsApp Account'} (+${s.info?.number || '-'})</p>`;
+                } else if (s.hasQR && s.qr) {
+                    statusBadge = '<span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 font-semibold animate-pulse">SCAN QR NOW</span>';
+                    details = `
+                        <div class="mt-3 flex items-start gap-4 flex-wrap sm:flex-nowrap">
+                            <img src="${s.qr}" class="h-28 w-28 border border-stone-200 bg-white p-1 rounded-2xl" alt="QR" />
+                            <div class="text-xs text-stone-500 leading-5">
+                                <p class="font-bold text-stone-700">Scan QR Code ini</p>
+                                <p>Buka WhatsApp > Perangkat tertaut > scan QR.</p>
+                            </div>
+                        </div>
+                    `;
+                } else if (s.error) {
+                    statusBadge = '<span class="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">ERROR</span>';
+                    details = `<p class="mt-1.5 text-xs text-red-600 font-semibold">${s.error}</p>`;
+                } else {
+                    statusBadge = '<span class="inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-xs font-bold text-stone-700">INITIALIZING</span>';
+                    details = '<p class="mt-1.5 text-xs text-stone-500"><i class="fas fa-circle-notch fa-spin mr-1"></i> Menghubungkan ke Puppeteer...</p>';
+                }
+
+                return `
+                    <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5">
+                        <div class="flex items-center justify-between">
+                            <span class="font-bold text-lg text-stone-900">${d.name}</span>
+                            ${statusBadge}
+                        </div>
+                        ${details}
+                    </div>
+                `;
+            }).join('');
+            
+            loadKeys();
         }
 
         async function loadKeys() {
@@ -194,23 +239,29 @@
                 return;
             }
 
-            list.innerHTML = keys.map((item) => `
-                <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5">
-                    <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                        <div class="min-w-0">
-                            <p class="text-lg font-semibold">${item.name}</p>
-                            <p class="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-stone-500">Created ${new Date(item.createdAt).toLocaleString('id-ID')}</p>
-                            <p class="mt-1 text-xs text-stone-500">Last used ${item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString('id-ID') : 'never'}</p>
-                            <code class="mt-3 block overflow-auto rounded-2xl bg-stone-900 p-4 text-xs text-stone-100">${item.key}</code>
-                        </div>
-                        <div class="flex flex-wrap gap-3">
-                            <button onclick="copyKey('${item.key}')" class="btn-soft bg-emerald-50 text-emerald-800">Copy</button>
-                            <button onclick="copyExpressExample('${item.key}', '${item.name.replace(/'/g, "\\'")}')" class="btn-soft bg-stone-100 text-stone-700">Copy Express Example</button>
-                            <button onclick="deleteKey(${item.id})" class="btn-soft bg-stone-900 text-white">Delete</button>
+            list.innerHTML = keys.map((item) => {
+                const deviceName = item.deviceId === 'auto' || !item.deviceId
+                    ? 'Otomatis (First Ready)'
+                    : (allDevices.find(d => String(d.id) === String(item.deviceId))?.name || `Device ID: ${item.deviceId}`);
+                return `
+                    <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5">
+                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                            <div class="min-w-0">
+                                <p class="text-lg font-semibold">${item.name}</p>
+                                <p class="mt-0.5 text-xs font-semibold text-stone-600">Device Tujuan: <span class="text-emerald-700 font-bold">${deviceName}</span></p>
+                                <p class="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-stone-500">Created ${new Date(item.createdAt).toLocaleString('id-ID')}</p>
+                                <p class="mt-1 text-xs text-stone-500">Last used ${item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString('id-ID') : 'never'}</p>
+                                <code class="mt-3 block overflow-auto rounded-2xl bg-stone-900 p-4 text-xs text-stone-100">${item.key}</code>
+                            </div>
+                            <div class="flex flex-wrap gap-3">
+                                <button onclick="copyKey('${item.key}')" class="btn-soft bg-emerald-50 text-emerald-800">Copy</button>
+                                <button onclick="copyExpressExample('${item.key}', '${item.name.replace(/'/g, "\\'")}')" class="btn-soft bg-stone-100 text-stone-700">Copy Express Example</button>
+                                <button onclick="deleteKey(${item.id})" class="btn-soft bg-stone-900 text-white">Delete</button>
+                            </div>
                         </div>
                     </div>
-                </div>
-            `).join('');
+                `;
+            }).join('');
         }
 
         async function loadHistory() {
@@ -226,7 +277,7 @@
                 <div class="rounded-3xl border border-stone-200 bg-stone-50 p-4">
                     <p class="font-semibold">${item.recipientName || item.bookingName || 'Unknown'}</p>
                     <p class="mt-1 text-sm text-stone-600">${item.phone || '-'}</p>
-                    <p class="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-stone-500">${item.appName || item.source || 'manual'} • ${new Date(item.sentAt).toLocaleString('id-ID')}</p>
+                    <p class="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-stone-500">${item.appName || item.source || 'manual'} • ${new Date(item.sentAt).toLocaleString('id-ID')}${item.senderDevice ? ` • via ${item.senderDevice}` : ''}</p>
                 </div>
             `).join('');
         }
@@ -281,11 +332,12 @@ app.listen(4000, () => {
         document.getElementById('keyForm').addEventListener('submit', async (event) => {
             event.preventDefault();
             const name = document.getElementById('keyName').value.trim();
+            const deviceId = document.getElementById('keyDeviceId').value;
             const feedback = document.getElementById('keyFeedback');
             const res = await fetch('/api/keys', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ name })
+                body: JSON.stringify({ name, deviceId })
             });
             const data = await res.json();
             if (data.success) {
@@ -306,6 +358,8 @@ app.listen(4000, () => {
         socket.on('qr', loadBotStatus);
         socket.on('ready', loadBotStatus);
         socket.on('status', loadBotStatus);
+        socket.on('device_status', loadBotStatus);
+        socket.on('devices_status', loadBotStatus);
 
         // Update API snippet to use the current host origin dynamically
         const snippetEl = document.getElementById('apiSnippet');
@@ -323,7 +377,6 @@ app.listen(4000, () => {
 
         loadStats();
         loadBotStatus();
-        loadKeys();
         loadHistory();
     </script>
     <%- include('partials/app-shell-script') %>

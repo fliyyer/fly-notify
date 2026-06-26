@@ -1,6 +1,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const config = require('../config');
 
 const dataDir = path.join(__dirname);
 if (!fs.existsSync(dataDir)) {
@@ -30,6 +31,7 @@ let database = {
         }
     ],
     apiKeys: [],
+    devices: [],
     settings: {
         botActive: true,
         senderName: 'FlyNotify',
@@ -48,7 +50,21 @@ function loadDB() {
             database = JSON.parse(data);
             if (!database.templates) database.templates = [];
             if (!database.apiKeys) database.apiKeys = [];
+            if (!database.devices) database.devices = [];
             if (!database.settings) database.settings = { botActive: true, senderName: 'FlyNotify', delay: 2000 };
+            
+            // Migrate existing single session config to "Default Device"
+            if (database.devices.length === 0) {
+                database.devices.push({
+                    id: 'default',
+                    name: 'Default Device',
+                    clientId: config.sessionName || 'fly-notify-session',
+                    phoneNumber: '',
+                    pushName: '',
+                    createdAt: new Date().toISOString()
+                });
+                fs.writeFileSync(dbFile, JSON.stringify(database, null, 2), 'utf8');
+            }
         }
     } catch (e) {
         console.error('Error loading DB:', e.message);
@@ -125,12 +141,13 @@ module.exports = {
     },
     getApiKeys: () => database.apiKeys,
     getApiKeyByValue: (value) => database.apiKeys.find((item) => item.key === value && item.active !== false),
-    addApiKey: (name) => {
+    addApiKey: (name, deviceId) => {
         const apiKey = {
             id: Date.now(),
             name: name || 'Default App',
             key: generateApiKeyValue(),
             active: true,
+            deviceId: deviceId || 'auto',
             createdAt: new Date().toISOString(),
             lastUsedAt: null
         };
@@ -148,5 +165,39 @@ module.exports = {
     deleteApiKey: (id) => {
         database.apiKeys = database.apiKeys.filter((item) => item.id !== id);
         saveDB();
+    },
+    getDevices: () => database.devices || [],
+    getDevice: (id) => (database.devices || []).find(d => String(d.id) === String(id)),
+    addDevice: (name) => {
+        if (!database.devices) database.devices = [];
+        const deviceId = `device_${Date.now()}`;
+        const newDevice = {
+            id: deviceId,
+            name: name || 'New Device',
+            clientId: deviceId,
+            phoneNumber: '',
+            pushName: '',
+            createdAt: new Date().toISOString()
+        };
+        database.devices.push(newDevice);
+        saveDB();
+        return newDevice;
+    },
+    updateDevice: (id, data) => {
+        if (!database.devices) database.devices = [];
+        const idx = database.devices.findIndex(d => String(d.id) === String(id));
+        if (idx !== -1) {
+            database.devices[idx] = { ...database.devices[idx], ...data };
+            saveDB();
+            return database.devices[idx];
+        }
+        return null;
+    },
+    deleteDevice: (id) => {
+        if (!database.devices) database.devices = [];
+        const deleted = database.devices.find(d => String(d.id) === String(id));
+        database.devices = database.devices.filter(d => String(d.id) !== String(id));
+        saveDB();
+        return deleted;
     }
 };

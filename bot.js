@@ -5,17 +5,59 @@ const path = require('path');
 const config = require('./config');
 const db = require('./data/database');
 
-let client = null;
-let qrCodeData = null;
-let isReady = false;
+const clients = {};
+const clientStatuses = {};
 let io = null;
-let clientInfo = null;
-let lastError = null;
 
 function setIO(socketIO) { io = socketIO; }
 
-function getStatus() {
-    return { ready: isReady, hasQR: !!qrCodeData, info: clientInfo, qr: qrCodeData, error: lastError };
+function getDevicesStatus() {
+    const statuses = {};
+    const devices = db.getDevices();
+    for (const device of devices) {
+        statuses[device.id] = clientStatuses[device.id] || {
+            ready: false,
+            hasQR: false,
+            qr: null,
+            info: null,
+            error: null
+        };
+    }
+    return statuses;
+}
+
+function getStatus(deviceId = 'default') {
+    let targetId = deviceId;
+    if (!clientStatuses[targetId]) {
+        const keys = Object.keys(clientStatuses);
+        if (keys.length > 0) targetId = keys[0];
+    }
+    return clientStatuses[targetId] || { ready: false, hasQR: false, info: null, qr: null, error: null };
+}
+
+function getCurrentQR(deviceId = 'default') {
+    const status = getStatus(deviceId);
+    return status.qr;
+}
+
+function emitDeviceStatus(deviceId) {
+    const status = clientStatuses[deviceId] || { ready: false, hasQR: false, info: null, qr: null, error: null };
+    if (io) {
+        io.emit('device_status', { deviceId, status });
+        io.emit('devices_status', getDevicesStatus());
+
+        // Backward compatibility for single device integrations (if default or first device)
+        const devices = db.getDevices();
+        const firstId = devices.length > 0 ? devices[0].id : 'default';
+        if (deviceId === firstId || deviceId === 'default') {
+            io.emit('qr', { qr: status.qr, status: status.ready ? 'ready' : (status.qr ? 'qr' : 'offline') });
+            if (status.ready) {
+                io.emit('ready', { info: status.info });
+            } else {
+                io.emit('status', { status: status.qr ? 'qr' : 'disconnected', message: status.error });
+            }
+        }
+    }
 }
 
 function normalizeWhatsAppNumber(phone) {
@@ -59,24 +101,47 @@ function resolveChromeExecutable() {
     return [...envCandidates, ...localCandidates].find((candidate) => candidate && fs.existsSync(candidate)) || null;
 }
 
-function initializeBot() {
-    console.log('🤖 Initializing WhatsApp Bot...');
+function initializeBot(deviceId) {
+    console.log(`🤖 Initializing WhatsApp Bot for Device: ${deviceId}...`);
     lastError = null;
+
+    if (clients[deviceId]) {
+        try {
+            clients[deviceId].destroy().catch(() => {});
+        } catch (e) {}
+        delete clients[deviceId];
+    }
+
+    const device = db.getDevice(deviceId);
+    if (!device) {
+        console.error(`Device not found in DB: ${deviceId}`);
+        return;
+    }
+
+    clientStatuses[deviceId] = {
+        ready: false,
+        hasQR: false,
+        qr: null,
+        info: null,
+        error: null
+    };
+
     const executablePath = resolveChromeExecutable();
     
     // Clean old auth if requested
     if (process.env.CLEAN_SESSION === 'true') {
-        const authPath = path.join(__dirname, '.wwebjs_auth');
+        const authPath = path.join(__dirname, '.wwebjs_auth', `session-${device.clientId}`);
         if (fs.existsSync(authPath)) {
             fs.rmSync(authPath, { recursive: true, force: true });
         }
     }
     
     // Clean SingletonLock if exists to prevent Puppeteer "profile in use" error in Docker
-    const authPath = path.join(__dirname, '.wwebjs_auth');
-    if (fs.existsSync(authPath)) {
+    const sessionAuthPath = path.join(__dirname, '.wwebjs_auth', `session-${device.clientId}`);
+    if (fs.existsSync(sessionAuthPath)) {
         try {
             const deleteLockFiles = (dir) => {
+                if (!fs.existsSync(dir)) return;
                 const files = fs.readdirSync(dir);
                 for (const file of files) {
                     const fullPath = path.join(dir, file);
@@ -96,15 +161,15 @@ function initializeBot() {
                     }
                 }
             };
-            deleteLockFiles(authPath);
+            deleteLockFiles(sessionAuthPath);
         } catch (err) {
-            console.warn('Warning: Failed to clean SingletonLock:', err.message);
+            console.warn(`Warning: Failed to clean SingletonLock for ${deviceId}:`, err.message);
         }
     }
     
-    client = new Client({
+    const client = new Client({
         authStrategy: new LocalAuth({
-            clientId: config.sessionName,
+            clientId: device.clientId,
             dataPath: path.join(__dirname, '.wwebjs_auth')
         }),
         puppeteer: {
@@ -122,65 +187,76 @@ function initializeBot() {
             ]
         }
     });
+
+    clients[deviceId] = client;
     
     client.on('qr', async (qr) => {
-        console.log('📱 QR Code received');
+        console.log(`📱 QR Code received for device ${device.name || deviceId}`);
         try {
-            qrCodeData = await qrcode.toDataURL(qr, {
+            const qrCodeData = await qrcode.toDataURL(qr, {
                 width: 400,
                 margin: 2,
                 color: { dark: '#000000', light: '#FFFFFF' }
             });
-            isReady = false;
-            if (io) io.emit('qr', { qr: qrCodeData, status: 'qr' });
+            clientStatuses[deviceId].qr = qrCodeData;
+            clientStatuses[deviceId].hasQR = true;
+            clientStatuses[deviceId].ready = false;
+            clientStatuses[deviceId].error = null;
+            emitDeviceStatus(deviceId);
         } catch (e) {
             console.error('QR error:', e.message);
         }
     });
     
     client.on('authenticated', () => {
-        console.log('✅ Authenticated');
-        if (io) io.emit('status', { status: 'authenticated' });
+        console.log(`✅ Authenticated device ${device.name || deviceId}`);
+        clientStatuses[deviceId].error = null;
+        emitDeviceStatus(deviceId);
     });
     
     client.on('auth_failure', (msg) => {
-        console.error('❌ Auth failed:', msg);
-        lastError = msg;
-        if (io) io.emit('status', { status: 'auth_failure', message: msg });
+        console.error(`❌ Auth failed for device ${device.name || deviceId}:`, msg);
+        clientStatuses[deviceId].error = msg;
+        emitDeviceStatus(deviceId);
     });
     
     client.on('ready', async () => {
-        isReady = true;
-        qrCodeData = null;
+        clientStatuses[deviceId].ready = true;
+        clientStatuses[deviceId].qr = null;
+        clientStatuses[deviceId].hasQR = false;
+        clientStatuses[deviceId].error = null;
         try {
-            clientInfo = {
+            clientStatuses[deviceId].info = {
                 name: client.info.pushname,
                 number: client.info.wid.user,
                 platform: client.info.platform
             };
-        } catch(e) { clientInfo = { name: 'Unknown', number: 'Unknown' }; }
-        console.log('✅ Bot ready!');
-        if (io) {
-            io.emit('ready', { info: clientInfo });
-            io.emit('qr', { qr: null, status: 'ready' });
+            db.updateDevice(deviceId, {
+                phoneNumber: client.info.wid.user,
+                pushName: client.info.pushname
+            });
+        } catch(e) {
+            clientStatuses[deviceId].info = { name: 'Unknown', number: 'Unknown' };
         }
+        console.log(`✅ Bot ready for device ${device.name || deviceId}!`);
+        emitDeviceStatus(deviceId);
     });
     
     client.on('disconnected', (reason) => {
-        isReady = false;
-        clientInfo = null;
-        lastError = typeof reason === 'string' ? reason : 'Bot disconnected';
-        console.log('❌ Disconnected:', reason);
-        if (io) io.emit('status', { status: 'disconnected', reason });
+        clientStatuses[deviceId].ready = false;
+        clientStatuses[deviceId].info = null;
+        clientStatuses[deviceId].error = typeof reason === 'string' ? reason : 'Bot disconnected';
+        console.log(`❌ Disconnected device ${device.name || deviceId}:`, reason);
+        emitDeviceStatus(deviceId);
         
-        // If logged out from phone, automatically clean session folder and restart bot to show new QR
         if (reason === 'LOGOUT') {
-            console.log('Session was logged out. Cleaning up session files...');
+            console.log(`Session was logged out for device ${device.name || deviceId}. Cleaning up session files...`);
             try {
                 client.destroy().catch(() => {});
             } catch (e) {}
+            delete clients[deviceId];
             
-            const authPath = path.join(__dirname, '.wwebjs_auth');
+            const authPath = path.join(__dirname, '.wwebjs_auth', `session-${device.clientId}`);
             if (fs.existsSync(authPath)) {
                 try {
                     fs.rmSync(authPath, { recursive: true, force: true });
@@ -188,7 +264,11 @@ function initializeBot() {
                     console.error('Failed to delete auth path on logout:', fsErr.message);
                 }
             }
-            setTimeout(() => initializeBot(), 2000);
+            db.updateDevice(deviceId, {
+                phoneNumber: '',
+                pushName: ''
+            });
+            setTimeout(() => initializeBot(deviceId), 2000);
         }
     });
     
@@ -207,18 +287,51 @@ function initializeBot() {
     });
     
     client.initialize().catch(err => {
-        isReady = false;
-        clientInfo = null;
-        qrCodeData = null;
-        lastError = err.message;
-        console.error('Init error:', err.message);
-        if (io) io.emit('status', { status: 'init_error', message: err.message });
+        clientStatuses[deviceId].ready = false;
+        clientStatuses[deviceId].info = null;
+        clientStatuses[deviceId].qr = null;
+        clientStatuses[deviceId].hasQR = false;
+        clientStatuses[deviceId].error = err.message;
+        console.error(`Init error for device ${device.name || deviceId}:`, err.message);
+        emitDeviceStatus(deviceId);
     });
 }
 
-async function sendNotification(booking, templateMessage) {
-    if (!isReady) throw new Error('Bot belum siap. Scan QR terlebih dahulu.');
+function initializeAllBots() {
+    db.loadDB();
+    const devices = db.getDevices();
+    console.log(`🤖 Initializing all WhatsApp bots... Found ${devices.length} devices.`);
+    for (const device of devices) {
+        initializeBot(device.id);
+    }
+}
+
+function getActiveClient(preferredDeviceId) {
+    if (preferredDeviceId && preferredDeviceId !== 'auto') {
+        const client = clients[preferredDeviceId];
+        const status = clientStatuses[preferredDeviceId];
+        if (client && status && status.ready) {
+            return { client, deviceId: preferredDeviceId };
+        }
+        throw new Error(`WhatsApp Device "${preferredDeviceId}" tidak aktif atau tidak terhubung`);
+    }
+
+    const readyDeviceIds = Object.keys(clientStatuses).filter(id => clientStatuses[id]?.ready);
+    if (readyDeviceIds.length === 0) {
+        throw new Error('Tidak ada WhatsApp Device yang aktif. Hubungkan setidaknya satu WhatsApp account.');
+    }
     
+    const deviceId = readyDeviceIds[0];
+    return { client: clients[deviceId], deviceId };
+}
+
+async function sendNotification(booking, templateMessage, preferredDeviceId) {
+    const clientObj = getActiveClient(preferredDeviceId);
+    const client = clientObj.client;
+    const deviceId = clientObj.deviceId;
+    const device = db.getDevice(deviceId);
+    const deviceName = device ? device.name : 'Unknown Device';
+
     const phone = normalizeWhatsAppNumber(booking.phone);
     if (!phone) throw new Error(`Nomor WhatsApp tidak valid untuk booking ${booking.name || booking.id}`);
 
@@ -244,7 +357,8 @@ async function sendNotification(booking, templateMessage) {
         bookingName: booking.name,
         phone: phone,
         message: message,
-        status: 'sent'
+        status: 'sent',
+        senderDevice: `${deviceName} (+${client.info.wid.user})`
     });
     
     if (io) io.emit('notification_sent', notif);
@@ -252,7 +366,12 @@ async function sendNotification(booking, templateMessage) {
 }
 
 async function sendDirectMessage(payload) {
-    if (!isReady) throw new Error('Bot belum siap. Scan QR terlebih dahulu.');
+    const preferredDeviceId = payload.deviceId || payload.preferredDeviceId;
+    const clientObj = getActiveClient(preferredDeviceId);
+    const client = clientObj.client;
+    const deviceId = clientObj.deviceId;
+    const device = db.getDevice(deviceId);
+    const deviceName = device ? device.name : 'Unknown Device';
 
     const phone = normalizeWhatsAppNumber(payload.phone || payload.to);
     if (!phone) throw new Error('Nomor tujuan tidak valid');
@@ -275,20 +394,21 @@ async function sendDirectMessage(payload) {
         phone,
         message,
         status: 'sent',
-        meta: payload.meta || null
+        meta: payload.meta || null,
+        senderDevice: `${deviceName} (+${client.info.wid.user})`
     });
 
     if (io) io.emit('notification_sent', notif);
     return { success: true, notif };
 }
 
-async function sendBulk(bookings, templateMessage) {
+async function sendBulk(bookings, templateMessage, preferredDeviceId) {
     const results = [];
     const settings = db.getSettings();
     
     for (let i = 0; i < bookings.length; i++) {
         try {
-            const result = await sendNotification(bookings[i], templateMessage);
+            const result = await sendNotification(bookings[i], templateMessage, preferredDeviceId);
             results.push({ ...result, bookingId: bookings[i].id });
             if (io) io.emit('bulk_progress', { current: i + 1, total: bookings.length, success: true });
             if (i < bookings.length - 1) {
@@ -302,7 +422,12 @@ async function sendBulk(bookings, templateMessage) {
     return results;
 }
 
-async function logoutBot() {
+async function logoutBot(deviceId) {
+    console.log(`🤖 Resetting session / Logging out device: ${deviceId}`);
+    const client = clients[deviceId];
+    const device = db.getDevice(deviceId);
+    if (!device) return { success: false, error: 'Device not found' };
+
     try {
         if (client) {
             try {
@@ -320,9 +445,10 @@ async function logoutBot() {
         console.error('Error during client logout cleanup:', e.message);
     }
 
-    // Always clean session files and re-initialize bot
+    delete clients[deviceId];
+
     try {
-        const authPath = path.join(__dirname, '.wwebjs_auth');
+        const authPath = path.join(__dirname, '.wwebjs_auth', `session-${device.clientId}`);
         if (fs.existsSync(authPath)) {
             fs.rmSync(authPath, { recursive: true, force: true });
         }
@@ -330,15 +456,73 @@ async function logoutBot() {
         console.error('Failed to delete auth path during logout:', fsErr.message);
     }
 
-    isReady = false;
-    clientInfo = null;
-    qrCodeData = null;
-    lastError = null;
+    if (clientStatuses[deviceId]) {
+        clientStatuses[deviceId].ready = false;
+        clientStatuses[deviceId].info = null;
+        clientStatuses[deviceId].qr = null;
+        clientStatuses[deviceId].hasQR = false;
+        clientStatuses[deviceId].error = null;
+    }
 
-    setTimeout(() => initializeBot(), 2000);
+    db.updateDevice(deviceId, {
+        phoneNumber: '',
+        pushName: ''
+    });
+
+    emitDeviceStatus(deviceId);
+    setTimeout(() => initializeBot(deviceId), 2000);
     return { success: true };
 }
 
-function getCurrentQR() { return qrCodeData; }
+async function deleteBot(deviceId) {
+    console.log(`🤖 Deleting bot for device: ${deviceId}`);
+    const client = clients[deviceId];
+    const device = db.getDevice(deviceId);
+    
+    try {
+        if (client) {
+            try {
+                await client.destroy();
+            } catch (destroyErr) {
+                console.warn('Warning: client.destroy failed:', destroyErr.message);
+            }
+        }
+    } catch (e) {
+        console.error('Error during client destroy:', e.message);
+    }
 
-module.exports = { initializeBot, sendNotification, sendDirectMessage, sendBulk, getStatus, getCurrentQR, setIO, logoutBot };
+    delete clients[deviceId];
+    delete clientStatuses[deviceId];
+
+    if (device) {
+        try {
+            const authPath = path.join(__dirname, '.wwebjs_auth', `session-${device.clientId}`);
+            if (fs.existsSync(authPath)) {
+                fs.rmSync(authPath, { recursive: true, force: true });
+            }
+        } catch (fsErr) {
+            console.error('Failed to delete auth path during bot deletion:', fsErr.message);
+        }
+        db.deleteDevice(deviceId);
+    }
+
+    if (io) {
+        io.emit('devices_status', getDevicesStatus());
+    }
+
+    return { success: true };
+}
+
+module.exports = {
+    initializeBot,
+    initializeAllBots,
+    sendNotification,
+    sendDirectMessage,
+    sendBulk,
+    getStatus,
+    getCurrentQR,
+    setIO,
+    logoutBot,
+    deleteBot,
+    getDevicesStatus
+};

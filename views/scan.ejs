@@ -2,20 +2,27 @@
 <html lang="id">
 <head>
     <%- include('partials/app-head', {
-        title: 'Connect Bot - FlyNotify',
-        description: 'Hubungkan device WhatsApp ke FlyNotify agar gateway siap menerima push notification.'
+        title: 'Manage WhatsApp Devices - FlyNotify',
+        description: 'Kelola dan hubungkan beberapa device WhatsApp agar gateway siap menerima push notification.'
     }) %>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
         * { font-family: 'Inter', sans-serif; }
         body { background: #f8f7f4; color: #1c1917; }
         h1, h2, h3 { font-family: 'Source Serif 4', serif; }
         .nav-link.active { background: #1f2937; color: white; }
         .nav-link.active i { color: #cbd5e1 !important; }
-        .card { background: white; border: 1px solid #e7e5e4; border-radius: 24px; box-shadow: 0 10px 30px rgba(28, 25, 23, 0.05); }
-        .btn-soft { border-radius: 9999px; padding: 0.85rem 1.2rem; font-weight: 600; transition: .2s ease; }
+        .card { background: white; border: 1px solid #e7e5e4; border-radius: 24px; box-shadow: 0 10px 30px rgba(28, 25, 23, 0.03); transition: transform 0.2s ease, box-shadow 0.2s ease; }
+        .card:hover { transform: translateY(-2px); box-shadow: 0 12px 35px rgba(28, 25, 23, 0.06); }
+        .btn-soft { border-radius: 9999px; padding: 0.75rem 1.25rem; font-weight: 600; transition: .2s ease; display: inline-flex; align-items: center; gap: 0.5rem; }
         .btn-soft:hover { transform: translateY(-1px); }
+        .pulsing-ring { animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite; }
+        @keyframes pulse { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: .5; transform: scale(1.05); } }
+        /* Modal styling */
+        .modal { display: none; position: fixed; inset: 0; z-index: 100; background: rgba(28, 25, 23, 0.4); backdrop-filter: blur(4px); align-items: center; justify-content: center; }
+        .modal.open { display: flex; }
     </style>
 </head>
 <body class="min-h-screen">
@@ -24,53 +31,70 @@
         <%- include('partials/sidebar') %>
         <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
             <header class="border-b border-stone-200 bg-white px-4 py-5 sm:px-6 lg:px-8">
-                <div class="flex items-start gap-3">
-                    <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 text-stone-700 lg:hidden" onclick="openSidebar()" aria-label="Open menu">
-                        <i class="fas fa-bars"></i>
-                    </button>
+                <div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <div class="flex items-start gap-3">
+                        <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 text-stone-700 lg:hidden" onclick="openSidebar()" aria-label="Open menu">
+                            <i class="fas fa-bars"></i>
+                        </button>
+                        <div>
+                            <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">WhatsApp Devices</h2>
+                            <p class="mt-1 text-sm text-stone-600 sm:text-base">Kelola beberapa nomor WhatsApp yang terhubung secara bersamaan.</p>
+                        </div>
+                    </div>
                     <div>
-                        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Connect WhatsApp Bot</h2>
-                        <p class="mt-2 text-sm leading-6 text-stone-600 sm:text-base">Hubungkan satu device WhatsApp agar gateway siap menerima push.</p>
+                        <button onclick="openAddDeviceModal()" class="btn-soft bg-stone-900 text-white shadow-lg hover:bg-stone-800">
+                            <i class="fas fa-plus"></i> Add WhatsApp Device
+                        </button>
                     </div>
                 </div>
             </header>
+            
             <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-                <div class="grid grid-cols-1 gap-6 xl:grid-cols-[0.9fr_1.1fr]">
-                    <section class="card p-6 sm:p-7">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Bot Status</p>
-                        <div id="botBadge" class="mt-4 inline-flex rounded-full bg-stone-100 px-4 py-2 text-sm font-semibold text-stone-700">Checking...</div>
-                        <p id="botMeta" class="mt-4 leading-7 text-stone-600"></p>
-                        <p id="botError" class="hidden mt-4 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700"></p>
-                        <div class="mt-6 flex flex-wrap gap-3">
-                            <button onclick="checkBotStatus()" class="btn-soft bg-stone-100 text-stone-700">Refresh</button>
-                            <button onclick="logoutBot()" class="btn-soft bg-stone-900 text-white">Reset Session</button>
-                        </div>
-                        <div class="mt-6 rounded-3xl border border-stone-200 bg-stone-50 p-5">
-                            <p class="font-semibold">Flow</p>
-                            <ol class="mt-3 space-y-2 text-sm text-stone-600">
-                                <li>1. Buka WhatsApp di HP.</li>
-                                <li>2. Masuk ke Perangkat tertaut.</li>
-                                <li>3. Pilih Tautkan perangkat.</li>
-                                <li>4. Scan QR yang muncul di panel kanan.</li>
-                            </ol>
-                        </div>
-                    </section>
-                    <section class="card p-6 sm:p-7">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">QR Pairing</p>
-                        <div id="qrContainer" class="hidden mt-5 text-center">
-                            <img id="qrImage" class="mx-auto h-auto w-full max-w-[320px] rounded-3xl border border-stone-200 bg-white p-3" alt="WhatsApp QR">
-                        </div>
-                        <div id="readyBox" class="hidden mt-5 rounded-3xl bg-emerald-50 p-6">
-                            <p class="text-2xl font-bold">Bot connected.</p>
-                            <p class="mt-2 text-stone-700" id="connName">-</p>
-                            <p class="text-stone-500" id="connNumber">-</p>
-                        </div>
-                        <div id="waitingBox" class="mt-5 rounded-3xl bg-stone-50 p-6">
-                            <p class="font-medium text-stone-700">Menunggu QR atau status bot terbaru.</p>
-                        </div>
-                    </section>
+                <!-- Skeleton Loader -->
+                <div id="loader" class="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
+                    <div class="animate-pulse rounded-[24px] border border-stone-200 bg-white p-6 h-64"></div>
+                    <div class="animate-pulse rounded-[24px] border border-stone-200 bg-white p-6 h-64"></div>
+                    <div class="animate-pulse rounded-[24px] border border-stone-200 bg-white p-6 h-64"></div>
+                </div>
+
+                <!-- Devices Grid -->
+                <div id="devicesGrid" class="hidden grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3"></div>
+
+                <!-- Empty State -->
+                <div id="emptyState" class="hidden text-center py-16 px-4">
+                    <div class="mx-auto w-24 h-24 rounded-full bg-stone-100 flex items-center justify-center text-stone-400 mb-4">
+                        <i class="fas fa-qrcode text-4xl"></i>
+                    </div>
+                    <h3 class="text-2xl font-bold text-stone-800">Belum ada device terdaftar</h3>
+                    <p class="mt-2 text-stone-500 max-w-sm mx-auto">Tambahkan device WhatsApp untuk mulai mengirimkan pesan gateway.</p>
+                    <button onclick="openAddDeviceModal()" class="mt-6 btn-soft bg-stone-900 text-white">
+                        <i class="fas fa-plus"></i> Tambah Device Pertama
+                    </button>
                 </div>
             </main>
+        </div>
+    </div>
+
+    <!-- Add Device Modal -->
+    <div id="addDeviceModal" class="modal px-4">
+        <div class="bg-white rounded-3xl max-w-md w-full p-6 shadow-2xl border border-stone-200 relative">
+            <button onclick="closeAddDeviceModal()" class="absolute top-4 right-4 text-stone-400 hover:text-stone-700">
+                <i class="fas fa-times text-lg"></i>
+            </button>
+            <h3 class="text-2xl font-bold text-stone-900 mb-2">Register WhatsApp Device</h3>
+            <p class="text-sm text-stone-500 mb-6">Beri nama unik untuk device ini (misal: "Customer Service", "Billing Line").</p>
+            
+            <form id="addDeviceForm" onsubmit="handleAddDevice(event)">
+                <div class="mb-5">
+                    <label class="block text-sm font-semibold text-stone-700 mb-2">Nama Device</label>
+                    <input type="text" id="newDeviceName" required placeholder="Contoh: CS WhatsApp" 
+                        class="w-full border border-stone-300 rounded-2xl bg-white px-4 py-3 outline-none focus:border-stone-950 focus:ring-2 focus:ring-stone-100 transition">
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button type="button" onclick="closeAddDeviceModal()" class="btn-soft bg-stone-100 text-stone-700">Batal</button>
+                    <button type="submit" class="btn-soft bg-stone-900 text-white hover:bg-stone-800">Simpan & Hubungkan</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -79,63 +103,209 @@
             localStorage.removeItem('wa_token');
             window.location.href = '/login';
         }
+        
         document.querySelectorAll('.nav-link').forEach((link) => {
             if (link.href === window.location.href) link.classList.add('active');
         });
-        async function checkBotStatus() {
-            const res = await fetch('/api/bot/status');
-            const status = await res.json();
-            const badge = document.getElementById('botBadge');
-            const meta = document.getElementById('botMeta');
-            const error = document.getElementById('botError');
-            const qrContainer = document.getElementById('qrContainer');
-            const qrImage = document.getElementById('qrImage');
-            const waitingBox = document.getElementById('waitingBox');
-            const readyBox = document.getElementById('readyBox');
 
-            if (status.ready) {
-                badge.className = 'mt-4 inline-flex rounded-full bg-emerald-100 px-4 py-2 text-sm font-semibold text-emerald-800';
-                badge.textContent = 'CONNECTED';
-                meta.textContent = 'Bot siap menerima push.';
-                error.classList.add('hidden');
-                qrContainer.classList.add('hidden');
-                waitingBox.classList.add('hidden');
-                readyBox.classList.remove('hidden');
-                document.getElementById('connName').textContent = status.info?.name || 'Unknown';
-                document.getElementById('connNumber').textContent = status.info?.number ? '+' + status.info.number : '-';
-            } else if (status.hasQR) {
-                badge.className = 'mt-4 inline-flex rounded-full bg-amber-100 px-4 py-2 text-sm font-semibold text-amber-800';
-                badge.textContent = 'SCAN QR NOW';
-                meta.textContent = 'Gunakan WhatsApp HP untuk pair perangkat.';
-                error.classList.add('hidden');
-                qrImage.src = status.qr || '';
-                qrContainer.classList.remove('hidden');
-                waitingBox.classList.remove('hidden');
-                readyBox.classList.add('hidden');
-            } else {
-                badge.className = 'mt-4 inline-flex rounded-full bg-stone-200 px-4 py-2 text-sm font-semibold text-stone-700';
-                badge.textContent = 'OFFLINE';
-                meta.textContent = 'Belum terhubung.';
-                qrContainer.classList.add('hidden');
-                readyBox.classList.add('hidden');
-                waitingBox.classList.remove('hidden');
-                if (status.error) {
-                    error.textContent = status.error;
-                    error.classList.remove('hidden');
-                } else {
-                    error.classList.add('hidden');
+        // Add Device Modal Control
+        function openAddDeviceModal() {
+            document.getElementById('addDeviceModal').classList.add('open');
+            document.getElementById('newDeviceName').focus();
+        }
+        function closeAddDeviceModal() {
+            document.getElementById('addDeviceModal').classList.remove('open');
+            document.getElementById('newDeviceName').value = '';
+        }
+
+        // Fetch and Render Devices
+        async function loadDevices() {
+            try {
+                const res = await fetch('/api/devices');
+                const devices = await res.json();
+                
+                document.getElementById('loader').classList.add('hidden');
+                
+                const grid = document.getElementById('devicesGrid');
+                const empty = document.getElementById('emptyState');
+                
+                if (devices.length === 0) {
+                    grid.classList.add('hidden');
+                    empty.classList.remove('hidden');
+                    return;
                 }
+                
+                empty.classList.add('hidden');
+                grid.classList.remove('hidden');
+                
+                grid.innerHTML = devices.map(device => renderDeviceCard(device)).join('');
+            } catch (err) {
+                console.error('Failed to load devices:', err);
             }
         }
-        async function logoutBot() {
-            await fetch('/api/bot/logout', { method: 'POST' });
-            setTimeout(checkBotStatus, 1500);
+
+        function renderDeviceCard(device) {
+            const status = device.status || { ready: false, hasQR: false, qr: null, error: null };
+            let badgeClass = '';
+            let badgeText = '';
+            let contentHtml = '';
+            let actionsHtml = '';
+
+            if (status.ready) {
+                badgeClass = 'bg-emerald-100 text-emerald-800';
+                badgeText = 'CONNECTED';
+                contentHtml = `
+                    <div class="flex items-center gap-4 py-6">
+                        <div class="w-16 h-16 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center text-2xl font-bold">
+                            <i class="fab fa-whatsapp"></i>
+                        </div>
+                        <div>
+                            <p class="font-bold text-lg text-stone-900">${status.info?.name || 'WhatsApp Account'}</p>
+                            <p class="text-sm font-medium text-stone-500">${status.info?.number ? '+' + status.info.number : '-'}</p>
+                            <span class="inline-flex items-center gap-1 mt-1 text-xs text-stone-400">
+                                <i class="fas fa-mobile-alt"></i> platform: ${status.info?.platform || 'web'}
+                            </span>
+                        </div>
+                    </div>
+                `;
+                actionsHtml = `
+                    <button onclick="logoutDevice('${device.id}')" class="btn-soft flex-1 bg-stone-100 text-stone-700 justify-center text-xs">
+                        <i class="fas fa-unlink"></i> Reset Session
+                    </button>
+                `;
+            } else if (status.hasQR && status.qr) {
+                badgeClass = 'bg-amber-100 text-amber-800';
+                badgeText = 'SCAN QR NOW';
+                contentHtml = `
+                    <div class="flex flex-col items-center py-4">
+                        <div class="relative bg-white border border-stone-200 p-2.5 rounded-3xl pulsing-ring">
+                            <img src="${status.qr}" class="h-44 w-44 object-contain rounded-2xl" alt="QR Code">
+                        </div>
+                        <p class="mt-4 text-xs font-semibold text-stone-500 text-center">Tautkan perangkat dengan memindai kode QR dari WhatsApp HP Anda.</p>
+                    </div>
+                `;
+                actionsHtml = `
+                    <button onclick="logoutDevice('${device.id}')" class="btn-soft bg-stone-100 text-stone-700 justify-center text-xs px-3">
+                        <i class="fas fa-rotate-right"></i> Refresh QR
+                    </button>
+                `;
+            } else if (status.error) {
+                badgeClass = 'bg-red-100 text-red-800';
+                badgeText = 'ERROR';
+                contentHtml = `
+                    <div class="py-6">
+                        <div class="rounded-2xl bg-red-50 p-4 border border-red-100 text-xs font-semibold text-red-700 overflow-auto max-h-36">
+                            <i class="fas fa-exclamation-triangle mr-1"></i> ${status.error}
+                        </div>
+                    </div>
+                `;
+                actionsHtml = `
+                    <button onclick="logoutDevice('${device.id}')" class="btn-soft bg-stone-100 text-stone-700 justify-center text-xs">
+                        <i class="fas fa-rotate-right"></i> Coba Lagi
+                    </button>
+                `;
+            } else {
+                badgeClass = 'bg-stone-100 text-stone-700';
+                badgeText = 'INITIALIZING';
+                contentHtml = `
+                    <div class="flex flex-col items-center justify-center py-10 text-stone-400">
+                        <i class="fas fa-circle-notch fa-spin text-3xl mb-3"></i>
+                        <p class="text-sm font-semibold">Memulai Puppeteer & WhatsApp...</p>
+                    </div>
+                `;
+                actionsHtml = `
+                    <button disabled class="btn-soft flex-1 bg-stone-50 text-stone-400 justify-center text-xs cursor-not-allowed">
+                        Initializing...
+                    </button>
+                `;
+            }
+
+            // Always allow deleting device (unless it is the default device to prevent lockouts, but wait - let's allow deleting any device, default can be deleted and recreated too)
+            const deleteBtn = `
+                <button onclick="deleteDevice('${device.id}', '${device.name}')" class="btn-soft bg-red-50 text-red-700 hover:bg-red-100 hover:text-red-800 justify-center p-3" title="Delete Device">
+                    <i class="fas fa-trash-alt"></i>
+                </button>
+            `;
+
+            return `
+                <div class="card p-6 flex flex-col justify-between min-h-[340px] relative">
+                    <div>
+                        <div class="flex items-center justify-between border-b border-stone-100 pb-3">
+                            <h3 class="font-bold text-xl text-stone-900 truncate pr-2">${device.name}</h3>
+                            <span class="inline-flex rounded-full px-2.5 py-1 text-xs font-bold ${badgeClass}">${badgeText}</span>
+                        </div>
+                        ${contentHtml}
+                    </div>
+                    <div class="flex gap-2 pt-3 border-t border-stone-100">
+                        ${actionsHtml}
+                        ${deleteBtn}
+                    </div>
+                </div>
+            `;
         }
+
+        // Add Device
+        async function handleAddDevice(e) {
+            e.preventDefault();
+            const name = document.getElementById('newDeviceName').value.trim();
+            if (!name) return;
+
+            try {
+                const res = await fetch('/api/devices', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeAddDeviceModal();
+                    loadDevices();
+                } else {
+                    alert(data.error || 'Gagal menambahkan device');
+                }
+            } catch (err) {
+                alert('Koneksi bermasalah: ' + err.message);
+            }
+        }
+
+        // Reset Session
+        async function logoutDevice(id) {
+            try {
+                await fetch(`/api/devices/${id}/logout`, { method: 'POST' });
+                loadDevices();
+            } catch (err) {
+                console.error('Failed to logout device:', err);
+            }
+        }
+
+        // Delete Device
+        async function deleteDevice(id, name) {
+            if (!confirm(`Apakah Anda yakin ingin menghapus device "${name}"?\nSemua session auth untuk device ini akan dihapus secara permanen.`)) return;
+
+            try {
+                const res = await fetch(`/api/devices/${id}`, { method: 'DELETE' });
+                const data = await res.json();
+                if (data.success) {
+                    loadDevices();
+                } else {
+                    alert(data.error || 'Gagal menghapus device');
+                }
+            } catch (err) {
+                console.error('Failed to delete device:', err);
+            }
+        }
+
+        // Socket IO configuration
         const socket = io();
-        socket.on('qr', checkBotStatus);
-        socket.on('ready', checkBotStatus);
-        socket.on('status', checkBotStatus);
-        checkBotStatus();
+        socket.on('devices_status', (statuses) => {
+            loadDevices();
+        });
+        socket.on('device_status', (data) => {
+            loadDevices();
+        });
+
+        // Init
+        loadDevices();
     </script>
     <%- include('partials/app-shell-script') %>
 </body>
