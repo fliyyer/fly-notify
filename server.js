@@ -87,35 +87,57 @@ app.post('/api/bot/logout', async (req, res) => {
 // ============ MULTI-DEVICE API ROUTES ============
 
 app.get('/api/devices', (req, res) => {
-    const devices = db.getDevices();
-    const statuses = bot.getDevicesStatus();
-    const result = devices.map(d => ({
-        ...d,
-        status: statuses[d.id] || { ready: false, hasQR: false, qr: null, info: null, error: null }
-    }));
-    res.json(result);
+    try {
+        const devices = db.getDevices() || [];
+        const statuses = bot.getDevicesStatus() || {};
+        const result = devices
+            .filter(d => d && d.id)
+            .map(d => ({
+                ...d,
+                status: statuses[d.id] || { ready: false, hasQR: false, qr: null, info: null, error: null }
+            }));
+        res.json(result);
+    } catch (error) {
+        console.error('Error in GET /api/devices:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 app.post('/api/devices', (req, res) => {
-    const { name } = req.body;
-    if (!name) {
-        return res.status(400).json({ success: false, error: 'Nama device harus diisi' });
+    try {
+        const { name } = req.body;
+        if (!name) {
+            return res.status(400).json({ success: false, error: 'Nama device harus diisi' });
+        }
+        const newDevice = db.addDevice(name);
+        bot.initializeBot(newDevice.id);
+        res.json({ success: true, device: newDevice });
+    } catch (error) {
+        console.error('Error in POST /api/devices:', error);
+        res.status(500).json({ success: false, error: error.message });
     }
-    const newDevice = db.addDevice(name);
-    bot.initializeBot(newDevice.id);
-    res.json({ success: true, device: newDevice });
 });
 
 app.delete('/api/devices/:id', async (req, res) => {
-    const { id } = req.params;
-    const result = await bot.deleteBot(id);
-    res.json(result);
+    try {
+        const { id } = req.params;
+        const result = await bot.deleteBot(id);
+        res.json(result);
+    } catch (error) {
+        console.error('Error in DELETE /api/devices/:id:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 app.post('/api/devices/:id/logout', async (req, res) => {
-    const { id } = req.params;
-    const result = await bot.logoutBot(id);
-    res.json(result);
+    try {
+        const { id } = req.params;
+        const result = await bot.logoutBot(id);
+        res.json(result);
+    } catch (error) {
+        console.error('Error in POST /api/devices/:id/logout:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 function fillTemplate(message, variables) {

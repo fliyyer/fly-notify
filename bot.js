@@ -13,15 +13,20 @@ function setIO(socketIO) { io = socketIO; }
 
 function getDevicesStatus() {
     const statuses = {};
-    const devices = db.getDevices();
-    for (const device of devices) {
-        statuses[device.id] = clientStatuses[device.id] || {
-            ready: false,
-            hasQR: false,
-            qr: null,
-            info: null,
-            error: null
-        };
+    try {
+        const devices = db.getDevices() || [];
+        for (const device of devices) {
+            if (!device || !device.id) continue;
+            statuses[device.id] = clientStatuses[device.id] || {
+                ready: false,
+                hasQR: false,
+                qr: null,
+                info: null,
+                error: null
+            };
+        }
+    } catch (e) {
+        console.error('Error in getDevicesStatus:', e.message);
     }
     return statuses;
 }
