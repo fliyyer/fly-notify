@@ -5,96 +5,106 @@
         title: 'Dashboard - FlyNotify',
         description: 'Dashboard FlyNotify untuk koneksi WhatsApp, API key, metrik, dan integrasi aplikasi client.'
     }) %>
-    <script src="https://cdn.tailwindcss.com"></script>
     <script src="/socket.io/socket.io.js"></script>
     <style>
-        * { font-family: 'Inter', sans-serif; }
-        body { background: #f8f7f4; color: #1c1917; }
-        h1, h2, h3 { font-family: 'Source Serif 4', serif; }
-        .nav-link.active { background: #1f2937; color: white; }
-        .nav-link.active i { color: #cbd5e1 !important; }
-        .card { background: white; border: 1px solid #e7e5e4; border-radius: 24px; box-shadow: 0 10px 30px rgba(28, 25, 23, 0.05); }
-        .btn-soft { border-radius: 9999px; padding: 0.85rem 1.2rem; font-weight: 600; transition: .2s ease; }
-        .btn-soft:hover { transform: translateY(-1px); }
+        h1, h2, h3 { font-family: 'Inter', sans-serif; }
     </style>
 </head>
-<body class="min-h-screen">
+<body class="bg-zinc-50/50 text-zinc-900 antialiased min-h-screen">
     <%- include('partials/auth-guard') %>
     <div class="flex min-h-screen overflow-hidden">
         <%- include('partials/sidebar') %>
         <div class="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <header class="border-b border-stone-200 bg-white px-4 py-5 sm:px-6 lg:px-8">
-                <div class="flex items-start gap-3">
-                    <button type="button" class="inline-flex h-11 w-11 items-center justify-center rounded-full border border-stone-200 text-stone-700 lg:hidden" onclick="openSidebar()" aria-label="Open menu">
+            <!-- Header -->
+            <header class="border-b border-zinc-200 bg-white px-6 py-5">
+                <div class="flex items-center gap-3">
+                    <button type="button" class="inline-flex h-9 w-9 items-center justify-center rounded-md border border-zinc-200 text-zinc-500 hover:text-zinc-950 hover:bg-zinc-50 lg:hidden" onclick="openSidebar()" aria-label="Open menu">
                         <i class="fas fa-bars"></i>
                     </button>
                     <div>
-                        <h2 class="text-3xl font-bold tracking-tight sm:text-4xl">Gateway Dashboard</h2>
-                        <p class="mt-2 text-sm leading-6 text-stone-600 sm:text-base">Satu panel FlyNotify untuk koneksi bot, API key, metrik, dan contoh integrasi.</p>
+                        <h2 class="text-xl font-bold tracking-tight text-zinc-900 sm:text-2xl">Gateway Dashboard</h2>
+                        <p class="text-xs text-zinc-500 mt-1">Satu panel FlyNotify untuk koneksi bot, API key, metrik, dan contoh integrasi.</p>
                     </div>
                 </div>
             </header>
-            <main class="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-                <section class="mb-6 grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-4">
-                    <div class="card p-6">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Total Sent</p>
-                        <p id="statTotalSent" class="mt-4 text-5xl font-bold tracking-tight">0</p>
+
+            <!-- Main Workspace -->
+            <main class="flex-1 overflow-y-auto p-6">
+                <!-- Stats Grid -->
+                <section class="mb-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
+                    <div class="card p-5">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Total Sent</p>
+                        <p id="statTotalSent" class="mt-2 text-3xl font-extrabold tracking-tight text-zinc-900">0</p>
                     </div>
-                    <div class="card p-6">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Sent Today</p>
-                        <p id="statTodaySent" class="mt-4 text-5xl font-bold tracking-tight">0</p>
+                    <div class="card p-5">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Sent Today</p>
+                        <p id="statTodaySent" class="mt-2 text-3xl font-extrabold tracking-tight text-zinc-900">0</p>
                     </div>
-                    <div class="card p-6">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">API Keys</p>
-                        <p id="statApiKeys" class="mt-4 text-5xl font-bold tracking-tight">0</p>
+                    <div class="card p-5">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">API Keys</p>
+                        <p id="statApiKeys" class="mt-2 text-3xl font-extrabold tracking-tight text-zinc-900">0</p>
                     </div>
-                    <div class="card p-6">
-                        <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Templates</p>
-                        <p id="statTemplates" class="mt-4 text-5xl font-bold tracking-tight">0</p>
+                    <div class="card p-5">
+                        <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Templates</p>
+                        <p id="statTemplates" class="mt-2 text-3xl font-extrabold tracking-tight text-zinc-900">0</p>
                     </div>
                 </section>
 
                 <div class="grid grid-cols-1 gap-6 xl:grid-cols-[1.15fr_0.85fr]">
                     <section class="space-y-6">
-                        <div class="card p-6 sm:p-7">
-                            <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                        <!-- WhatsApp Accounts Card -->
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between border-b border-zinc-100 pb-4">
                                 <div>
-                                    <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Bot Runtime</p>
-                                    <h3 class="mt-2 text-3xl font-bold">WhatsApp Accounts</h3>
+                                    <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Bot Runtime</p>
+                                    <h3 class="mt-1 text-lg font-bold text-zinc-900">WhatsApp Accounts</h3>
                                 </div>
-                                <div class="flex flex-wrap gap-3">
-                                    <a href="/scan" class="btn-soft bg-emerald-50 text-emerald-800"><i class="fas fa-cog"></i> Manage Devices</a>
-                                </div>
+                                <a href="/scan" class="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50">
+                                    <i class="fas fa-cog mr-1.5 text-zinc-500"></i> Manage Devices
+                                </a>
                             </div>
                             <div id="dashboardDevicesList" class="mt-6 space-y-4">
-                                <div class="animate-pulse rounded-3xl bg-stone-100 h-20 w-full"></div>
+                                <div class="animate-pulse rounded-md bg-zinc-100 h-16 w-full"></div>
                             </div>
                         </div>
 
-                        <div class="card p-6 sm:p-7">
-                            <div>
-                                <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">API Keys</p>
-                                <h3 class="mt-2 text-3xl font-bold">Generate key untuk app client</h3>
-                                <p class="mt-2 text-sm text-stone-600">Generate hanya aktif saat bot WhatsApp sudah connected.</p>
+                        <!-- API Keys Generator Card -->
+                        <div class="card p-6">
+                            <div class="border-b border-zinc-100 pb-4">
+                                <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Credentials</p>
+                                <h3 class="mt-1 text-lg font-bold text-zinc-900">API Key Generator</h3>
+                                <p class="text-xs text-zinc-500 mt-1">Generate key hanya dapat diakses saat minimal satu bot WhatsApp berstatus connected.</p>
                             </div>
+                            
                             <form id="keyForm" class="mt-6 flex flex-col gap-4">
                                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <input id="keyName" placeholder="Nama app, tenant, atau partner" class="rounded-full border border-stone-300 bg-white px-5 py-3 outline-none">
-                                    <select id="keyDeviceId" class="rounded-full border border-stone-300 bg-white px-5 py-3 outline-none">
-                                        <option value="auto">Kirim lewat: Otomatis (First Ready)</option>
-                                    </select>
+                                    <div class="flex flex-col gap-1.5">
+                                        <label class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Nama Integrasi / App</label>
+                                        <input id="keyName" placeholder="Contoh: CS App, Billing Tenant" class="field">
+                                    </div>
+                                    <div class="flex flex-col gap-1.5">
+                                        <label class="text-[10px] font-bold uppercase tracking-wider text-zinc-400">Tujuan Pengiriman</label>
+                                        <select id="keyDeviceId" class="field">
+                                            <option value="auto">Kirim lewat: Otomatis (First Ready)</option>
+                                        </select>
+                                    </div>
                                 </div>
-                                <button id="generateKeyBtn" type="submit" class="btn-soft bg-emerald-600 text-white justify-center self-start">Generate API Key</button>
+                                <button id="generateKeyBtn" type="submit" class="inline-flex h-9 items-center justify-center rounded-md bg-zinc-900 px-4 text-sm font-medium text-zinc-50 shadow transition-colors hover:bg-zinc-900/90 self-start">
+                                    Generate API Key
+                                </button>
                             </form>
-                            <div id="keyFeedback" class="hidden mt-4 rounded-2xl p-4 text-sm font-medium"></div>
+                            <div id="keyFeedback" class="hidden mt-4"></div>
                             <div id="keyList" class="mt-6 space-y-4"></div>
                         </div>
                     </section>
 
+                    <!-- Sidebar Panel -->
                     <aside class="space-y-6">
-                        <div class="card p-6 sm:p-7">
-                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">POST /api/push</p>
-                            <pre id="apiSnippet" class="mt-4 overflow-auto rounded-2xl bg-stone-900 p-5 text-xs whitespace-pre-wrap text-stone-100">curl -X POST http://localhost:3000/api/push \
+                        <!-- Code Snippet -->
+                        <div class="card p-6">
+                            <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Endpoint push</p>
+                            <h3 class="mt-1 text-base font-bold text-zinc-900">POST /api/push</h3>
+                            <pre id="apiSnippet" class="mt-4 overflow-auto rounded-md bg-zinc-950 p-4 text-xs font-mono text-zinc-100 leading-relaxed">curl -X POST http://localhost:3000/api/push \
   -H "Content-Type: application/json" \
   -H "x-api-key: YOUR_KEY" \
   -d '{
@@ -105,9 +115,13 @@
   }'</pre>
                         </div>
 
-                        <div class="card p-6 sm:p-7">
-                            <p class="text-xs font-semibold uppercase tracking-[0.2em] text-stone-500">Latest Delivery</p>
-                            <div id="recentHistory" class="mt-4 space-y-3"></div>
+                        <!-- History logs -->
+                        <div class="card p-6">
+                            <div class="flex items-center justify-between border-b border-zinc-100 pb-3 mb-4">
+                                <p class="text-[10px] font-semibold uppercase tracking-[0.2em] text-zinc-400">Activity</p>
+                                <h3 class="text-xs font-bold text-zinc-500">Latest Delivery</h3>
+                            </div>
+                            <div id="recentHistory" class="space-y-3"></div>
                         </div>
                     </aside>
                 </div>
@@ -174,9 +188,9 @@
 
             if (devices.length === 0) {
                 container.innerHTML = `
-                    <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5 text-center">
-                        <p class="font-semibold text-stone-700">Belum ada WhatsApp device terdaftar.</p>
-                        <a href="/scan" class="mt-3 inline-flex text-sm font-bold text-stone-900 underline hover:text-stone-700">Tautkan WhatsApp pertama</a>
+                    <div class="rounded-md border border-zinc-200 bg-zinc-50 p-6 text-center">
+                        <p class="text-sm font-medium text-zinc-600">Belum ada WhatsApp device terdaftar.</p>
+                        <a href="/scan" class="mt-2 inline-flex text-xs font-bold text-zinc-900 underline hover:text-zinc-700">Tautkan WhatsApp pertama</a>
                     </div>
                 `;
                 if (keyButton) keyButton.disabled = true;
@@ -195,31 +209,31 @@
                 let details = '';
 
                 if (s.ready) {
-                    statusBadge = '<span class="inline-flex rounded-full bg-emerald-100 px-2.5 py-1 text-xs font-bold text-emerald-800">CONNECTED</span>';
-                    details = `<p class="mt-1.5 text-sm font-medium text-stone-900">${s.info?.name || 'WhatsApp Account'} (+${s.info?.number || '-'})</p>`;
+                    statusBadge = '<span class="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">CONNECTED</span>';
+                    details = `<p class="mt-2 text-sm font-semibold text-zinc-800">${s.info?.name || 'WhatsApp Account'} (+${s.info?.number || '-'})</p>`;
                 } else if (s.hasQR && s.qr) {
-                    statusBadge = '<span class="inline-flex rounded-full bg-amber-100 px-2.5 py-1 text-xs font-bold text-amber-800 font-semibold animate-pulse">SCAN QR NOW</span>';
+                    statusBadge = '<span class="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 animate-pulse">SCAN QR NOW</span>';
                     details = `
-                        <div class="mt-3 flex items-start gap-4 flex-wrap sm:flex-nowrap">
-                            <img src="${s.qr}" class="h-28 w-28 border border-stone-200 bg-white p-1 rounded-2xl" alt="QR" />
-                            <div class="text-xs text-stone-500 leading-5">
-                                <p class="font-bold text-stone-700">Scan QR Code ini</p>
+                        <div class="mt-3 flex items-start gap-4">
+                            <img src="${s.qr}" class="h-20 w-20 border border-zinc-200 bg-white p-1 rounded-md" alt="QR" />
+                            <div class="text-xs text-zinc-500 leading-normal">
+                                <p class="font-bold text-zinc-700">Scan QR Code ini</p>
                                 <p>Buka WhatsApp > Perangkat tertaut > scan QR.</p>
                             </div>
                         </div>
                     `;
                 } else if (s.error) {
-                    statusBadge = '<span class="inline-flex rounded-full bg-red-100 px-2.5 py-1 text-xs font-bold text-red-800">ERROR</span>';
-                    details = `<p class="mt-1.5 text-xs text-red-600 font-semibold">${s.error}</p>`;
+                    statusBadge = '<span class="inline-flex items-center rounded-md border border-red-200 bg-red-50 px-2 py-0.5 text-xs font-semibold text-red-700">ERROR</span>';
+                    details = `<p class="mt-2 text-xs text-red-600 font-semibold">${s.error}</p>`;
                 } else {
-                    statusBadge = '<span class="inline-flex rounded-full bg-stone-100 px-2.5 py-1 text-xs font-bold text-stone-700">INITIALIZING</span>';
-                    details = '<p class="mt-1.5 text-xs text-stone-500"><i class="fas fa-circle-notch fa-spin mr-1"></i> Menghubungkan ke Puppeteer...</p>';
+                    statusBadge = '<span class="inline-flex items-center rounded-md border border-zinc-200 bg-zinc-100 px-2 py-0.5 text-xs font-semibold text-zinc-700">INITIALIZING</span>';
+                    details = '<p class="mt-2 text-xs text-zinc-500"><i class="fas fa-circle-notch fa-spin mr-1.5"></i> Menghubungkan ke Puppeteer...</p>';
                 }
 
                 return `
-                    <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5">
+                    <div class="rounded-md border border-zinc-200 bg-zinc-50 p-4">
                         <div class="flex items-center justify-between">
-                            <span class="font-bold text-lg text-stone-900">${d.name}</span>
+                            <span class="font-bold text-sm text-zinc-900">${d.name}</span>
                             ${statusBadge}
                         </div>
                         ${details}
@@ -235,7 +249,7 @@
             const keys = await res.json();
             const list = document.getElementById('keyList');
             if (keys.length === 0) {
-                list.innerHTML = '<div class="rounded-3xl border border-stone-200 bg-stone-50 p-4 font-medium">Belum ada API key.</div>';
+                list.innerHTML = '<div class="rounded-md border border-zinc-200 bg-zinc-50 p-4 text-xs font-medium text-zinc-500">Belum ada API key aktif.</div>';
                 return;
             }
 
@@ -244,19 +258,25 @@
                     ? 'Otomatis (First Ready)'
                     : (allDevices.find(d => String(d.id) === String(item.deviceId))?.name || `Device ID: ${item.deviceId}`);
                 return `
-                    <div class="rounded-3xl border border-stone-200 bg-stone-50 p-5">
-                        <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="rounded-md border border-zinc-200 bg-zinc-50 p-4">
+                        <div class="flex flex-col gap-3">
                             <div class="min-w-0">
-                                <p class="text-lg font-semibold">${item.name}</p>
-                                <p class="mt-0.5 text-xs font-semibold text-stone-600">Device Tujuan: <span class="text-emerald-700 font-bold">${deviceName}</span></p>
-                                <p class="mt-1 text-xs font-medium uppercase tracking-[0.16em] text-stone-500">Created ${new Date(item.createdAt).toLocaleString('id-ID')}</p>
-                                <p class="mt-1 text-xs text-stone-500">Last used ${item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString('id-ID') : 'never'}</p>
-                                <code class="mt-3 block overflow-auto rounded-2xl bg-stone-900 p-4 text-xs text-stone-100">${item.key}</code>
+                                <p class="text-sm font-bold text-zinc-900">${item.name}</p>
+                                <p class="mt-1 text-xs text-zinc-500">Device: <span class="text-zinc-700 font-semibold">${deviceName}</span></p>
+                                <p class="mt-0.5 text-[10px] text-zinc-400 uppercase tracking-wider">Created: ${new Date(item.createdAt).toLocaleString('id-ID')}</p>
+                                <p class="text-[10px] text-zinc-400 uppercase tracking-wider">Last used: ${item.lastUsedAt ? new Date(item.lastUsedAt).toLocaleString('id-ID') : 'never'}</p>
+                                <code class="mt-3 block overflow-auto rounded-md bg-zinc-950 p-3 text-xs font-mono text-zinc-100">${item.key}</code>
                             </div>
-                            <div class="flex flex-wrap gap-3">
-                                <button onclick="copyKey('${item.key}')" class="btn-soft bg-emerald-50 text-emerald-800">Copy</button>
-                                <button onclick="copyExpressExample('${item.key}', '${item.name.replace(/'/g, "\\'")}')" class="btn-soft bg-stone-100 text-stone-700">Copy Express Example</button>
-                                <button onclick="deleteKey(${item.id})" class="btn-soft bg-stone-900 text-white">Delete</button>
+                            <div class="flex flex-wrap gap-2 pt-2 border-t border-zinc-200/60 justify-end">
+                                <button onclick="copyKey('${item.key}')" class="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50">
+                                    <i class="fas fa-copy mr-1 text-zinc-400"></i> Copy
+                                </button>
+                                <button onclick="copyExpressExample('${item.key}', '${item.name.replace(/'/g, "\\'")}')" class="inline-flex h-8 items-center justify-center rounded-md border border-zinc-200 bg-white px-3 text-xs font-medium text-zinc-700 shadow-sm transition-colors hover:bg-zinc-50">
+                                    Node.js Sample
+                                </button>
+                                <button onclick="deleteKey(${item.id})" class="inline-flex h-8 items-center justify-center rounded-md border border-red-200 bg-red-50 px-3 text-xs font-medium text-red-700 transition-colors hover:bg-red-100">
+                                    Delete
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -264,20 +284,31 @@
             }).join('');
         }
 
+        function maskPhoneNumber(phone) {
+            const str = String(phone || '').trim();
+            if (!str || str === '-') return '-';
+            if (str.length <= 8) return str;
+            const front = str.slice(0, 4);
+            const back = str.slice(-4);
+            const middleLength = str.length - 8;
+            const stars = '*'.repeat(middleLength > 0 ? middleLength : 4);
+            return `${front}${stars}${back}`;
+        }
+
         async function loadHistory() {
             const res = await fetch('/api/notifications');
             const items = await res.json();
             const container = document.getElementById('recentHistory');
             if (items.length === 0) {
-                container.innerHTML = '<div class="rounded-3xl border border-stone-200 bg-stone-50 p-4 font-medium">Belum ada riwayat push.</div>';
+                container.innerHTML = '<div class="rounded-md border border-zinc-200 bg-zinc-50 p-4 text-xs font-medium text-zinc-500">Belum ada riwayat push.</div>';
                 return;
             }
 
             container.innerHTML = items.slice(0, 4).map((item) => `
-                <div class="rounded-3xl border border-stone-200 bg-stone-50 p-4">
-                    <p class="font-semibold">${item.recipientName || item.bookingName || 'Unknown'}</p>
-                    <p class="mt-1 text-sm text-stone-600">${item.phone || '-'}</p>
-                    <p class="mt-2 text-xs font-medium uppercase tracking-[0.16em] text-stone-500">${item.appName || item.source || 'manual'} • ${new Date(item.sentAt).toLocaleString('id-ID')}${item.senderDevice ? ` • via ${item.senderDevice}` : ''}</p>
+                <div class="rounded-md border border-zinc-200 bg-zinc-50 p-3 text-xs leading-normal">
+                    <p class="font-bold text-zinc-900">${item.recipientName || item.bookingName || 'Unknown'}</p>
+                    <p class="text-zinc-500">${maskPhoneNumber(item.phone)}</p>
+                    <p class="mt-1 text-[10px] text-zinc-400 font-medium uppercase tracking-wider">${item.appName || item.source || 'manual'} • ${new Date(item.sentAt).toLocaleString('id-ID')}${item.senderDevice ? ` • via ${item.senderDevice}` : ''}</p>
                 </div>
             `).join('');
         }
@@ -342,13 +373,13 @@ app.listen(4000, () => {
             const data = await res.json();
             if (data.success) {
                 document.getElementById('keyName').value = '';
-                feedback.className = 'mt-4 rounded-2xl bg-emerald-50 p-4 text-sm font-medium text-emerald-700';
+                feedback.className = 'mt-4 rounded-md border border-emerald-200 bg-emerald-50/50 p-3 text-xs font-semibold text-emerald-700';
                 feedback.textContent = 'API key berhasil dibuat dan siap dipakai oleh Express client.';
                 feedback.classList.remove('hidden');
                 loadKeys();
                 loadStats();
             } else {
-                feedback.className = 'mt-4 rounded-2xl bg-red-50 p-4 text-sm font-medium text-red-700';
+                feedback.className = 'mt-4 rounded-md border border-red-200 bg-red-50/50 p-3 text-xs font-semibold text-red-700';
                 feedback.textContent = data.error || 'Gagal generate API key.';
                 feedback.classList.remove('hidden');
             }
