@@ -107,21 +107,37 @@
             const endIdx = Math.min(startIdx + pageSize, total);
             const paginatedItems = allNotifications.slice(startIdx, endIdx);
 
-            container.innerHTML = paginatedItems.map((item) => `
-                <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
-                    <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
-                        <div class="min-w-0 flex-1">
-                            <div class="flex items-center gap-2 flex-wrap">
-                                <p class="text-sm font-bold text-zinc-900">${item.recipientName || item.bookingName || 'Unknown recipient'}</p>
-                                <span class="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">${item.status || 'sent'}</span>
+            container.innerHTML = paginatedItems.map((item, index) => {
+                const message = item.message || '';
+                const lineCount = message.split('\n').length;
+                const isLong = message.length > 120 || lineCount > 2;
+
+                return `
+                    <div class="rounded-lg border border-zinc-200 bg-white p-5 shadow-sm">
+                        <div class="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-center gap-2 flex-wrap">
+                                    <p class="text-sm font-bold text-zinc-900">${item.recipientName || item.bookingName || 'Unknown recipient'}</p>
+                                    <span class="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700 uppercase tracking-wide">${item.status || 'sent'}</span>
+                                </div>
+                                <p class="text-xs text-zinc-500 mt-1">${maskPhoneNumber(item.phone)}</p>
+                                <p class="mt-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">${item.appName || item.source || 'manual'} • ${new Date(item.sentAt).toLocaleString('id-ID')}${item.senderDevice ? ` • via ${item.senderDevice}` : ''}</p>
                             </div>
-                            <p class="text-xs text-zinc-500 mt-1">${maskPhoneNumber(item.phone)}</p>
-                            <p class="mt-1.5 text-[10px] font-medium uppercase tracking-wider text-zinc-400">${item.appName || item.source || 'manual'} • ${new Date(item.sentAt).toLocaleString('id-ID')}${item.senderDevice ? ` • via ${item.senderDevice}` : ''}</p>
+                        </div>
+                        <div class="relative mt-4">
+                            <pre id="msg-pre-${index}" class="whitespace-pre-wrap text-xs text-zinc-650 font-mono bg-zinc-50 border border-zinc-150 p-3 rounded-md leading-relaxed transition-all duration-200 ${isLong ? 'line-clamp-2' : ''}">${message || '-'}</pre>
+                            ${isLong ? `
+                            <div class="mt-2 flex justify-end">
+                                <button id="msg-btn-${index}" onclick="toggleMessage(${index})" class="inline-flex items-center gap-1.5 rounded bg-zinc-100 px-2.5 py-1 text-[11px] font-semibold text-zinc-600 hover:bg-zinc-200 transition-colors">
+                                    <span>Lihat Selengkapnya</span>
+                                    <i class="fas fa-chevron-down text-[9px] transition-transform duration-200"></i>
+                                </button>
+                            </div>
+                            ` : ''}
                         </div>
                     </div>
-                    <pre class="mt-4 whitespace-pre-wrap text-xs text-zinc-650 font-mono bg-zinc-50 border border-zinc-150 p-3 rounded-md leading-relaxed">${item.message || '-'}</pre>
-                </div>
-            `).join('');
+                `;
+            }).join('');
 
             // Update Pagination UI
             document.getElementById('paginationControls').classList.remove('hidden');
@@ -136,6 +152,24 @@
         function changePage(direction) {
             currentPage += direction;
             renderPage();
+        }
+
+        function toggleMessage(index) {
+            const pre = document.getElementById(`msg-pre-${index}`);
+            const btn = document.getElementById(`msg-btn-${index}`);
+            const text = btn.querySelector('span');
+            const icon = btn.querySelector('i');
+            
+            const isCollapsed = pre.classList.contains('line-clamp-2');
+            if (isCollapsed) {
+                pre.classList.remove('line-clamp-2');
+                text.textContent = 'Sembunyikan';
+                icon.classList.add('rotate-180');
+            } else {
+                pre.classList.add('line-clamp-2');
+                text.textContent = 'Lihat Selengkapnya';
+                icon.classList.remove('rotate-180');
+            }
         }
 
         loadNotifications();

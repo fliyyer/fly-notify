@@ -163,7 +163,7 @@
                         const statusText = device.status?.ready ? 'Connected' : 'Offline';
                         const option = document.createElement('option');
                         option.value = device.id;
-                        option.textContent = `${device.name} (${device.phoneNumber ? '+' + device.phoneNumber : 'Not connected'}) [${statusText}]`;
+                        option.textContent = `${device.name} (${device.phoneNumber ? '+' + maskPhoneNumber(device.phoneNumber) : 'Not connected'}) [${statusText}]`;
                         if (!device.status?.ready) {
                             option.textContent += ' ❌';
                             option.disabled = true;
@@ -210,7 +210,7 @@
 
                 if (s.ready) {
                     statusBadge = '<span class="inline-flex items-center rounded-md border border-emerald-200 bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">CONNECTED</span>';
-                    details = `<p class="mt-2 text-sm font-semibold text-zinc-800">${s.info?.name || 'WhatsApp Account'} (+${s.info?.number || '-'})</p>`;
+                    details = `<p class="mt-2 text-sm font-semibold text-zinc-800">${s.info?.name || 'WhatsApp Account'} (+${maskPhoneNumber(s.info?.number)})</p>`;
                 } else if (s.hasQR && s.qr) {
                     statusBadge = '<span class="inline-flex items-center rounded-md border border-amber-200 bg-amber-50 px-2 py-0.5 text-xs font-semibold text-amber-700 animate-pulse">SCAN QR NOW</span>';
                     details = `

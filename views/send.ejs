@@ -276,7 +276,7 @@
                         details.innerHTML = data.results.map((r) =>
                             `<div class="result-item ${r.success ? 'ok' : 'fail'}">
                                 <i class="fas ${r.success ? 'fa-check' : 'fa-times'} fa-xs flex-none"></i>
-                                <span class="font-mono font-medium">${r.phone}</span>
+                                <span class="font-mono font-medium">${maskPhoneNumber(r.phone)}</span>
                                 ${!r.success ? `<span class="ml-auto text-xs opacity-70">${r.error || 'Gagal'}</span>` : ''}
                             </div>`
                         ).join('');
@@ -311,7 +311,7 @@
                     const statusText = device.status?.ready ? 'Connected' : 'Offline/Not Connected';
                     const option = document.createElement('option');
                     option.value = device.id;
-                    option.textContent = `${device.name} (${device.phoneNumber ? '+' + device.phoneNumber : 'Not connected'}) [${statusText}]`;
+                    option.textContent = `${device.name} (${device.phoneNumber ? '+' + maskPhoneNumber(device.phoneNumber) : 'Not connected'}) [${statusText}]`;
                     if (!device.status?.ready) {
                         option.textContent += ' ❌';
                         option.disabled = true;
@@ -323,6 +323,17 @@
             } catch (e) {
                 console.error('Failed to load devices:', e);
             }
+        }
+
+        function maskPhoneNumber(phone) {
+            const str = String(phone || '').trim();
+            if (!str || str === '-') return '-';
+            if (str.length <= 8) return str;
+            const front = str.slice(0, 4);
+            const back = str.slice(-4);
+            const middleLength = str.length - 8;
+            const stars = '*'.repeat(middleLength > 0 ? middleLength : 4);
+            return `${front}${stars}${back}`;
         }
 
         loadTemplates();
